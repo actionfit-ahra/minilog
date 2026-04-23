@@ -3163,6 +3163,7 @@ async function uploadSingularCSV() {
         '<strong>✓ 업로드 완료</strong><br>' +
         '기간: ' + result.dateRange + '<br>' +
         '새로 저장: ' + result.uploaded + '행 · 유지: ' + result.kept + '행 · 전체: ' + result.total + '행' +
+        (result.costInjected !== undefined ? '<br>💰 Cost 재주입: ' + result.costInjected + '행 (Cost 시트에서)' : '') +
         (result.excluded ? '<br>제외: ' + result.excluded + '행' : '') +
         (result.notWhitelisted ? '<br>화이트리스트 아님: ' + result.notWhitelisted + '행' : '') +
         '</div>';
