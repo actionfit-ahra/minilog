@@ -1438,6 +1438,16 @@
         <div class="kpi-value" id="kpi-inst">—</div>
         <div class="kpi-sub" id="kpi-inst-sub"></div>
       </div>
+      <div class="kpi-card" style="cursor:pointer;" data-action="switchView" data-args="'campaign'">
+        <div class="kpi-label">진행 중 캠페인</div>
+        <div class="kpi-value" id="kpi-live-count">—</div>
+        <div class="kpi-sub" id="kpi-live-sub">타이틀별 합산</div>
+      </div>
+      <div class="kpi-card" style="cursor:pointer;" data-action="switchView" data-args="'campaign'">
+        <div class="kpi-label">활성 타이틀</div>
+        <div class="kpi-value" id="kpi-live-titles">—</div>
+        <div class="kpi-sub" id="kpi-live-titles-sub">라이브 중</div>
+      </div>
     </div>
 
     <div class="chart-grid">
@@ -2153,15 +2163,9 @@
       <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 6px; font-weight: 500;">Apps Script 웹앱 URL</label>
       <input type="text" id="cfg-sheet-url" value="https://script.google.com/a/macros/actionfit.kr/s/AKfycbymm1WDUadsf2Bl02ITEVKYmovfD5ya2Eh3fesw3XYDWXcuNETI1obMHoR34v4Co6Q/exec" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:9px 11px; font-family:var(--font-mono); font-size:11px; border-radius: 4px;">
       <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
-        <button class="btn primary" data-action="syncFromSheet">신규만 불러오기</button>
-        <button class="btn" data-action="loadOlderData">과거 데이터 추가</button>
+        <button class="btn primary" data-action="syncFromSheet">신규 데이터 불러오기</button>
         <button class="btn" data-action="forceRefreshSheet">전체 새로고침</button>
-        <button class="btn" data-action="triggerFullSync">싱귤러+슬랙 동기화</button>
-        <button class="btn" data-action="triggerSingularSync">싱귤러만</button>
-        <button class="btn" data-action="triggerSlackSync">슬랙만</button>
-        <button class="btn" data-action="testConnection">연결 테스트</button>
         <button class="btn" data-action="clearCache">캐시 삭제</button>
-        <button class="btn" data-action="showSetupGuide">설정 가이드</button>
       </div>
       <div id="sheet-status" style="margin-top: 12px; padding: 10px; background: var(--bg-elev); border-radius: 4px; font-size: 12px; color: var(--text-dim); min-height: 20px; font-family: var(--font-mono); line-height: 1.7;">준비됨. 위 버튼을 클릭하세요.</div>
     </div>
@@ -3500,6 +3504,17 @@ function renderOverview() {
   document.getElementById('kpi-roi7-sub').textContent = roi7 >= 1.0 ? '✓ 회수 완료' : 'D14+ 필요';
   document.getElementById('kpi-inst-sub').textContent = '총 ' + NUM(sum.installs);
 
+  // 🔗 캠페인 연동
+  try {
+    const campStats = getOverallCampaignStats();
+    const $ = id => document.getElementById(id);
+    if ($('kpi-live-count')) $('kpi-live-count').textContent = campStats.totalActive;
+    if ($('kpi-live-titles')) $('kpi-live-titles').textContent = campStats.activeTitles + ' / ' + APP_WHITELIST.length;
+    if ($('kpi-live-sub')) {
+      $('kpi-live-sub').textContent = campStats.totalHolding > 0 ? '대기 ' + campStats.totalHolding + '건' : '네트워크별 합산';
+    }
+  } catch(e) { console.warn('캠페인 연동 실패:', e); }
+
   // 비교 모드 활성화 시 이전 기간 델타 추가
   if (STATE.filter.compare) {
     const prevRows = getPrevFilteredRows();
@@ -4060,12 +4075,20 @@ function renderInsights() {
   }).filter(x => x.cost >= 50 && x.roi1 < 0.5).sort((a,b) => b.loss - a.loss);
 
   bleeders.slice(0, 5).forEach(b => {
+    // 🔗 현재 캠페인 상태 매칭
+    let liveNote = '';
+    try {
+      const cs = getCampaignStatusForTitle(b.app);
+      const isLive = cs.activeNetworks.some(n => String(n).toLowerCase().includes(String(b.src).toLowerCase()) || String(b.src).toLowerCase().includes(String(n).toLowerCase()));
+      if (isLive) liveNote = ' ⚠ 현재 라이브 중';
+    } catch(e) {}
+
     insights.push({
       type: 'urgent',
       icon: '🩸',
       category: '즉시 조치',
       target: `${b.app} · ${b.src} · ${b.os}/${b.country}`,
-      status: `D1 ROI ${PCT(b.roi1,0)} → D3 회수 실패`,
+      status: `D1 ROI ${PCT(b.roi1,0)} → D3 회수 실패${liveNote}`,
       cost: b.cost, roi: b.roi1,
       action: b.roi1 < 0.3 
         ? `즉시 종료 · 30일 손실 ${USDp(b.loss * 30 / effectiveDays())}`
@@ -4083,12 +4106,21 @@ function renderInsights() {
   }).filter(x => x.cost >= 50 && x.roi1 >= 1.0).sort((a,b) => b.roi1 - a.roi1);
 
   winners.slice(0, 5).forEach(w => {
+    // 🔗 현재 캠페인 상태
+    let liveNote = '';
+    try {
+      const cs = getCampaignStatusForTitle(w.app);
+      const isLive = cs.activeNetworks.some(n => String(n).toLowerCase().includes(String(w.src).toLowerCase()) || String(w.src).toLowerCase().includes(String(n).toLowerCase()));
+      if (isLive) liveNote = ' ✓ 라이브 중';
+      else if (cs.ended > 0) liveNote = ' · 현재 종료 상태';
+    } catch(e) {}
+
     insights.push({
       type: 'opportunity',
       icon: '💰',
       category: '볼륨 확대',
       target: `${w.app} · ${w.src} · ${w.os}/${w.country}`,
-      status: `D1 ROI ${PCT(w.roi1,0)} · 일평균 ${Math.round(w.dailyInstalls)}인스톨`,
+      status: `D1 ROI ${PCT(w.roi1,0)} · 일평균 ${Math.round(w.dailyInstalls)}인스톨${liveNote}`,
       cost: w.cost, roi: w.roi1,
       action: w.dailyInstalls < 50 ? '일 예산 +100% (볼륨 작음)' : '일 예산 +50% 단계 증액',
       priority: w.roi1 * w.cost
@@ -4647,8 +4679,22 @@ function renderTitles() {
     const roi1 = agg ? (agg.Rev1d/(agg.Cost||1)) : null;
     const cls = roi1 == null ? '' : roi1 >= 0.8 ? 'good' : roi1 >= 0.5 ? 'warn' : 'bad';
     const daily = agg ? agg.Installs / effectiveDays() : 0;
-    return `<div class="title-card">
-      <div class="name">${t.title}</div>
+
+    // 🔗 캠페인 상태
+    let campBadge = '';
+    try {
+      const cs = getCampaignStatusForTitle(t.title);
+      if (cs.active > 0) {
+        campBadge = '<span style="background:#10b98122;color:#10b981;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;margin-left:6px;">라이브 ' + cs.active + '</span>';
+      } else if (cs.holding > 0) {
+        campBadge = '<span style="background:#f59e0b22;color:#f59e0b;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;margin-left:6px;">대기 ' + cs.holding + '</span>';
+      } else if (cs.ended > 0) {
+        campBadge = '<span style="background:#94a3b822;color:#64748b;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;margin-left:6px;">종료</span>';
+      }
+    } catch(e) {}
+
+    return `<div class="title-card" data-action="showLiveCampaignDetail" data-args="'${t.title.replace(/'/g, "\\'")}'">
+      <div class="name">${t.title}${campBadge}</div>
       <div class="meta">${agg ? volumeBadge(daily) + ' · 일평균 ' + Math.round(daily) : '데이터 없음'}</div>
       <div class="stat">
         <div class="stat-main ${cls}">${roi1 == null ? '—' : PCT(roi1,0)}</div>
@@ -4673,6 +4719,76 @@ const APP_WHITELIST = [
   'Woodblockdoku', 'Sugar Bang', 'Number Block Drag',
   'Bubble Pinogpong', 'SortJuice', '퐁당냥'
 ];
+
+// ============================================================
+//  🔗 캠페인 정보 공용 유틸 (홈/타이틀/개선제안 탭에서 공유)
+// ============================================================
+
+// 14일 내 활성 상태 판정
+function isActiveCampaignAction(action) {
+  return ['신규라이브', '재개', '캡조정', '골조정', '소재변경', '단가조정', '이벤트변경'].includes(action);
+}
+function isHoldingCampaignAction(action) {
+  return ['대기', '홀딩'].includes(action);
+}
+
+// 특정 타이틀의 현재 라이브 상태 조회
+function getCampaignStatusForTitle(app) {
+  const campaigns = (STATE.slack && STATE.slack.campaign) || [];
+  const titleLower = String(app || '').toLowerCase().trim();
+  const related = campaigns.filter(c => {
+    const cTitle = String(c.title || '').toLowerCase().trim();
+    return cTitle === titleLower;
+  });
+
+  if (!related.length) return { active: 0, holding: 0, ended: 0, networks: [], latest: null };
+
+  related.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+
+  // 14일 내로 네트워크별 최신 액션 추적
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 14);
+  const byNet = new Map();
+  related.forEach(c => {
+    if (!c.timestamp) return;
+    const d = new Date(c.timestamp);
+    if (isNaN(d) || d < cutoff) return;
+    const net = c.network || '—';
+    if (!byNet.has(net)) byNet.set(net, c);
+  });
+
+  let active = 0, holding = 0, ended = 0;
+  const activeNets = [], holdingNets = [], endedNets = [];
+  byNet.forEach((c, net) => {
+    if (isActiveCampaignAction(c.action)) { active++; activeNets.push(net); }
+    else if (isHoldingCampaignAction(c.action)) { holding++; holdingNets.push(net); }
+    else if (c.action === '종료') { ended++; endedNets.push(net); }
+  });
+
+  return {
+    active, holding, ended,
+    activeNetworks: activeNets,
+    holdingNetworks: holdingNets,
+    endedNetworks: endedNets,
+    networks: [...byNet.keys()],
+    latest: related[0]
+  };
+}
+
+// 전체 집계: 활성 타이틀 수 / 활성 캠페인 수
+function getOverallCampaignStats() {
+  let activeTitles = 0, totalActive = 0, totalHolding = 0;
+  const perTitle = {};
+  APP_WHITELIST.forEach(app => {
+    const s = getCampaignStatusForTitle(app);
+    perTitle[app] = s;
+    if (s.active > 0) activeTitles++;
+    totalActive += s.active;
+    totalHolding += s.holding;
+  });
+  return { activeTitles, totalActive, totalHolding, perTitle };
+}
+
 
 function renderLiveCampaign() {
   const campaigns = (STATE.slack && STATE.slack.campaign) || [];
@@ -5120,34 +5236,23 @@ function openAddCampaignModal() {
         '</label>' +
       '</div>' +
 
-      '<label style="display:block;">' +
-        '<span style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:4px; font-weight:500;">이벤트 조건 (예: 6000점 달성)</span>' +
-        '<input type="text" id="mc-event" class="gf-select" style="width:100%;" placeholder="예: 5000점 달성, 50레벨달성, unique_score_3500">' +
-      '</label>' +
-
-      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
-        '<label style="display:block;">' +
-          '<span style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:4px; font-weight:500;">KPI / 단가</span>' +
-          '<input type="text" id="mc-kpi" class="gf-select" style="width:100%;" placeholder="예: 단가 1500원, ROAS Goal 40%, CPI $2">' +
-        '</label>' +
-        '<label style="display:block;">' +
-          '<span style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:4px; font-weight:500;">예산</span>' +
-          '<input type="text" id="mc-budget" class="gf-select" style="width:100%;" placeholder="예: 일 $100, 7만 5천원">' +
-        '</label>' +
+      '<div style="border:1px solid var(--border); border-radius:6px; padding:10px; background:var(--bg);">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+          '<span style="font-size:12px; color:var(--text); font-weight:600;">이벤트 조건 + KPI</span>' +
+          '<button type="button" class="btn sm" data-action="addEventRow">+ 조건 추가</button>' +
+        '</div>' +
+        '<div id="mc-event-list" style="display:flex; flex-direction:column; gap:6px;"></div>' +
+        '<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">싱글: 1개 조건 / 멀티: 여러 개 조건 (예: 2000점 / 5000점 / 10000점)</div>' +
       '</div>' +
 
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
         '<label style="display:block;">' +
-          '<span style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:4px; font-weight:500;">데일리 캡</span>' +
-          '<input type="text" id="mc-cap" class="gf-select" style="width:100%;" placeholder="예: 100건, 무제한">' +
+          '<span style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:4px; font-weight:500;">예산</span>' +
+          '<input type="text" id="mc-budget" class="gf-select" style="width:100%;" placeholder="예: 일 $100, 7만 5천원">' +
         '</label>' +
         '<label style="display:block;">' +
-          '<span style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:4px; font-weight:500;">멀티/싱글</span>' +
-          '<select id="mc-type" class="gf-select" style="width:100%;">' +
-            '<option value="">—</option>' +
-            '<option value="싱글">싱글</option>' +
-            '<option value="멀티">멀티</option>' +
-          '</select>' +
+          '<span style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:4px; font-weight:500;">데일리 캡</span>' +
+          '<input type="text" id="mc-cap" class="gf-select" style="width:100%;" placeholder="예: 100건, 무제한">' +
         '</label>' +
       '</div>' +
 
@@ -5185,7 +5290,7 @@ function openAddCampaignModal() {
 
   openLiveCampaignModal(content);
 
-  // 현재 시각 기본값
+  // 현재 시각 기본값 + 이벤트 행 1개 자동 생성
   setTimeout(() => {
     const tsEl = document.getElementById('mc-timestamp');
     if (tsEl) {
@@ -5193,7 +5298,24 @@ function openAddCampaignModal() {
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
       tsEl.value = now.toISOString().slice(0, 16);
     }
+    // 초기 이벤트 행 1개
+    if (typeof addEventRow === 'function') addEventRow();
   }, 100);
+}
+
+// 이벤트+KPI 행 추가 (멀티 이벤트 지원)
+function addEventRow(btn, presetEvent, presetKpi) {
+  const list = document.getElementById('mc-event-list');
+  if (!list) return;
+  const idx = list.children.length;
+  const row = document.createElement('div');
+  row.className = 'mc-event-row';
+  row.style.cssText = 'display:grid; grid-template-columns:1fr 1fr auto; gap:6px; align-items:center;';
+  row.innerHTML =
+    '<input type="text" class="gf-select mc-ev-name" placeholder="이벤트 조건 (예: 2000점 달성)" value="' + (presetEvent || '') + '">' +
+    '<input type="text" class="gf-select mc-ev-kpi" placeholder="KPI/단가 (예: 1000원)" value="' + (presetKpi || '') + '">' +
+    '<button type="button" class="btn sm" style="padding:4px 10px;" onclick="this.parentElement.remove()">×</button>';
+  list.appendChild(row);
 }
 
 async function submitManualCampaign() {
@@ -5209,223 +5331,103 @@ async function submitManualCampaign() {
   if (!network) { if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">네트워크를 입력하세요</span>'; return; }
   if (!action) { if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">액션을 선택하세요</span>'; return; }
 
-  const data = {
+  // 이벤트 + KPI 쌍 수집
+  const eventRows = [];
+  document.querySelectorAll('#mc-event-list .mc-event-row').forEach(r => {
+    const ev = r.querySelector('.mc-ev-name')?.value?.trim() || '';
+    const kp = r.querySelector('.mc-ev-kpi')?.value?.trim() || '';
+    if (ev || kp) eventRows.push({ event: ev, kpi: kp });
+  });
+  // 이벤트가 하나도 없으면 기본 빈 행 하나 넣기
+  if (eventRows.length === 0) eventRows.push({ event: '', kpi: '' });
+
+  // 싱글/멀티 자동 판정
+  const campaignType = eventRows.filter(r => r.event).length > 1 ? '멀티' : (eventRows.filter(r => r.event).length === 1 ? '싱글' : '');
+
+  const commonBase = {
     timestamp: timestamp ? timestamp + ':00' : new Date().toISOString().slice(0, 19),
     title: title,
     network: network,
     action: action,
     os: $('mc-os')?.value || '',
     country: $('mc-country')?.value?.trim() || '',
-    event: $('mc-event')?.value?.trim() || '',
-    kpi: $('mc-kpi')?.value?.trim() || '',
     budget: $('mc-budget')?.value?.trim() || '',
     daily_cap: $('mc-cap')?.value?.trim() || '',
-    campaign_type: $('mc-type')?.value || '',
+    campaign_type: campaignType,
     campaign_name: $('mc-campname')?.value?.trim() || '',
     note: $('mc-note')?.value?.trim() || '',
     author: $('mc-author')?.value?.trim() || '수동입력'
   };
 
-  // 1. 로컬 STATE에 즉시 추가
   if (!STATE.slack) STATE.slack = {};
   if (!STATE.slack.campaign) STATE.slack.campaign = [];
 
-  const newRow = {
-    timestamp: data.timestamp,
-    title: data.title,
-    action: data.action,
-    network: data.network,
-    os: data.os,
-    country: data.country,
-    author: data.author,
-    budget: data.budget,
-    daily_cap: data.daily_cap,
-    kpi: data.kpi,
-    campaign_name: data.campaign_name,
-    event: data.event,
-    campaign_type: data.campaign_type,
-    note: data.note,
-    channel: 'manual',
-    event_key: [data.timestamp, data.title, data.network, data.action].join('|')
-  };
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-dim);">저장 중... (' + eventRows.length + '건)</span>';
 
-  STATE.slack.campaign.unshift(newRow);
+  // 이벤트 조건 개수만큼 행 생성
+  const dataList = eventRows.map((er, i) => {
+    // timestamp를 초 단위로 살짝 어긋나게 해서 event_key 충돌 방지
+    const tsDate = new Date(commonBase.timestamp);
+    if (i > 0) tsDate.setSeconds(tsDate.getSeconds() + i);
+    const ts = tsDate.toISOString().slice(0, 19);
+    return Object.assign({}, commonBase, {
+      timestamp: ts,
+      event: er.event,
+      kpi: er.kpi
+    });
+  });
 
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-dim);">저장 중...</span>';
+  // 1. 로컬 STATE에 즉시 추가
+  dataList.forEach(data => {
+    const newRow = {
+      timestamp: data.timestamp,
+      title: data.title,
+      action: data.action,
+      network: data.network,
+      os: data.os,
+      country: data.country,
+      author: data.author,
+      budget: data.budget,
+      daily_cap: data.daily_cap,
+      kpi: data.kpi,
+      campaign_name: data.campaign_name,
+      event: data.event,
+      campaign_type: data.campaign_type,
+      note: data.note,
+      channel: 'manual',
+      event_key: [data.timestamp, data.title, data.network, data.action, data.event].join('|')
+    };
+    STATE.slack.campaign.unshift(newRow);
+  });
 
-  // 2. 구글시트에도 저장 시도
+  // 2. 구글시트에도 저장 (각 행 개별 요청)
+  let okCount = 0, failCount = 0;
   try {
     const url = window.APPS_SCRIPT_URL || (typeof APPS_SCRIPT_URL !== 'undefined' ? APPS_SCRIPT_URL : '');
     if (url && typeof authFetch === 'function') {
-      await authFetch(url + '?action=addManualCampaign&data=' + encodeURIComponent(JSON.stringify(data)));
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--good);">✓ 저장 완료 (시트에도 반영됨)</span>';
+      for (const data of dataList) {
+        try {
+          await authFetch(url + '?action=addManualCampaign&data=' + encodeURIComponent(JSON.stringify(data)));
+          okCount++;
+        } catch (e) { failCount++; }
+      }
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--good);">✓ ' + okCount + '건 저장 완료' + (failCount > 0 ? ' (' + failCount + '건 시트 실패)' : '') + '</span>';
     } else {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warn);">✓ 로컬에 저장 (시트 동기화는 다음 싱크에 반영)</span>';
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warn);">✓ 로컬에 ' + dataList.length + '건 저장 (시트는 다음 싱크에 반영)</span>';
     }
   } catch (e) {
     console.error(e);
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--warn);">✓ 로컬에 저장 (시트 동기화 실패: ' + e.message + ')</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--warn);">✓ 로컬에 ' + dataList.length + '건 저장 (시트 오류: ' + e.message + ')</span>';
   }
 
-  // 3. 캐시 갱신
-  try {
-    if (typeof saveCache === 'function') saveCache();
-  } catch(e) {}
-
-  // 4. UI 갱신
+  // 3. 캐시 + UI 갱신
+  try { if (typeof saveCache === 'function') saveCache(); } catch(e) {}
   if (typeof invalidateRenderCache === 'function') invalidateRenderCache();
   if (typeof renderLiveCampaign === 'function') renderLiveCampaign();
 
-  // 2초 후 모달 닫기
   setTimeout(() => closeLiveCampaignModal(), 1500);
 }
 
-// 📝 수동 캠페인 추가 모달
-function openAddCampaignModal() {
-  const appOpts = APP_WHITELIST.map(a => `<option value="${a}">${a}</option>`).join('');
-  const networkOpts = ['Tyrads', 'Zucks', 'adPOPcorn', 'TNK Factory', 'NBT', 'Skyflag',
-    'Naver Webtoon', 'Cashfriends', 'Buzzvil', 'GF Rewards', 'Adison',
-    'Tapjoy', 'Cashplay', 'AppLovin', 'Unity', 'Meta', 'Google Ads'
-  ].map(n => `<option value="${n}">${n}</option>`).join('');
-  const actionOpts = ['신규라이브', '재개', '캡조정', '골조정', '단가조정', '이벤트변경', '소재변경', '대기', '종료']
-    .map(a => `<option value="${a}">${a}</option>`).join('');
-
-  const todayStr = new Date().toISOString().slice(0, 16);
-
-  const content = `<div style="padding:24px; max-width:640px; width:90vw;">
-    <h3 style="margin:0 0 16px; font-size:18px; font-weight:700;">수동 캠페인 추가</h3>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-      <label style="font-size:12px; color:var(--text-dim);">타이틀 *
-        <select id="ac-title" class="gf-select" style="width:100%; margin-top:4px;">${appOpts}</select>
-      </label>
-      <label style="font-size:12px; color:var(--text-dim);">네트워크 *
-        <select id="ac-network" class="gf-select" style="width:100%; margin-top:4px;"><option value="">선택...</option>${networkOpts}</select>
-      </label>
-      <label style="font-size:12px; color:var(--text-dim);">액션 *
-        <select id="ac-action" class="gf-select" style="width:100%; margin-top:4px;">${actionOpts}</select>
-      </label>
-      <label style="font-size:12px; color:var(--text-dim);">날짜/시간
-        <input type="datetime-local" id="ac-timestamp" class="gf-select" style="width:100%; margin-top:4px;" value="${todayStr}">
-      </label>
-      <label style="font-size:12px; color:var(--text-dim);">OS
-        <select id="ac-os" class="gf-select" style="width:100%; margin-top:4px;">
-          <option value="">—</option><option value="Android">Android</option><option value="iOS">iOS</option><option value="Both">Both</option>
-        </select>
-      </label>
-      <label style="font-size:12px; color:var(--text-dim);">국가
-        <input type="text" id="ac-country" class="gf-select" style="width:100%; margin-top:4px;" placeholder="KR / JP / US ...">
-      </label>
-      <label style="font-size:12px; color:var(--text-dim); grid-column:1/3;">캠페인명
-        <input type="text" id="ac-campaign-name" class="gf-select" style="width:100%; margin-top:4px;" placeholder="예: MFJ-SkyFlag-AOS-multi-260123">
-      </label>
-      <label style="font-size:12px; color:var(--text-dim);">이벤트 조건
-        <input type="text" id="ac-event" class="gf-select" style="width:100%; margin-top:4px;" placeholder="예: 6000점 달성">
-      </label>
-      <label style="font-size:12px; color:var(--text-dim);">KPI / 단가
-        <input type="text" id="ac-kpi" class="gf-select" style="width:100%; margin-top:4px;" placeholder="예: 단가 1500원 or ROAS Goal 40%">
-      </label>
-      <label style="font-size:12px; color:var(--text-dim);">예산
-        <input type="text" id="ac-budget" class="gf-select" style="width:100%; margin-top:4px;" placeholder="예: $100 또는 7만 5천원">
-      </label>
-      <label style="font-size:12px; color:var(--text-dim);">데일리 캡
-        <input type="text" id="ac-daily-cap" class="gf-select" style="width:100%; margin-top:4px;" placeholder="예: 100건">
-      </label>
-      <label style="font-size:12px; color:var(--text-dim); grid-column:1/3;">메모
-        <textarea id="ac-note" class="gf-select" style="width:100%; margin-top:4px; min-height:60px; font-family:inherit;" placeholder="추가 내용 (선택)"></textarea>
-      </label>
-    </div>
-
-    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
-      <button class="btn" data-action="closeLiveCampaignModal">취소</button>
-      <button class="btn primary" data-action="saveManualCampaign">추가</button>
-    </div>
-
-    <div id="ac-status" style="margin-top:12px; font-size:12px;"></div>
-  </div>`;
-
-  openLiveCampaignModal(content);
-}
-
-// 수동 캠페인 추가 저장 (Apps Script로 전송)
-async function saveManualCampaign() {
-  const $ = id => document.getElementById(id);
-  const statusEl = $('ac-status');
-
-  const title = $('ac-title').value.trim();
-  const network = $('ac-network').value.trim();
-  const action = $('ac-action').value.trim();
-  const timestamp = $('ac-timestamp').value || new Date().toISOString().slice(0, 16);
-
-  if (!title || !network || !action) {
-    statusEl.innerHTML = '<span style="color:var(--bad);">타이틀, 네트워크, 액션은 필수입니다</span>';
-    return;
-  }
-
-  const payload = {
-    timestamp: timestamp + ':00',
-    app: title,
-    network: network,
-    action: action,
-    os: $('ac-os').value,
-    country: $('ac-country').value.trim(),
-    campaign_name: $('ac-campaign-name').value.trim(),
-    event: $('ac-event').value.trim(),
-    kpi: $('ac-kpi').value.trim(),
-    budget: $('ac-budget').value.trim(),
-    daily_cap: $('ac-daily-cap').value.trim(),
-    note: $('ac-note').value.trim(),
-    author: '수동입력'
-  };
-
-  statusEl.innerHTML = '<span style="color:var(--text-dim);">저장 중...</span>';
-
-  try {
-    // Apps Script URL 가져오기
-    const urlInput = document.getElementById('cfg-sheet-url');
-    const baseUrl = (urlInput && urlInput.value) || 'https://script.google.com/a/macros/actionfit.kr/s/AKfycbymm1WDUadsf2Bl02ITEVKYmovfD5ya2Eh3fesw3XYDWXcuNETI1obMHoR34v4Co6Q/exec';
-    const pw = sessionStorage.getItem('minilog-pw') || '';
-    const url = baseUrl + '?action=addManualCampaign&pw=' + encodeURIComponent(pw);
-
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'data=' + encodeURIComponent(JSON.stringify(payload))
-    });
-    const result = await resp.json();
-    if (result.ok) {
-      statusEl.innerHTML = '<span style="color:var(--good);">✓ 저장 완료. 데이터 새로고침 중...</span>';
-      // 로컬 STATE에도 즉시 반영
-      if (!STATE.slack) STATE.slack = { campaign: [], schedule: [], build: [] };
-      if (!STATE.slack.campaign) STATE.slack.campaign = [];
-      STATE.slack.campaign.push({
-        timestamp: payload.timestamp,
-        title: title,
-        network: network,
-        action: action,
-        os: payload.os || '—',
-        country: payload.country || '—',
-        campaign_name: payload.campaign_name,
-        event: payload.event,
-        kpi: payload.kpi,
-        budget: payload.budget,
-        daily_cap: payload.daily_cap,
-        note: payload.note,
-        author: '수동입력',
-        channel: 'campaign'
-      });
-      setTimeout(() => {
-        closeLiveCampaignModal();
-        invalidateRenderCache();
-        renderLiveCampaign();
-      }, 800);
-    } else {
-      statusEl.innerHTML = '<span style="color:var(--bad);">실패: ' + (result.error || '알 수 없음') + '</span>';
-    }
-  } catch (e) {
-    statusEl.innerHTML = '<span style="color:var(--bad);">네트워크 오류: ' + e.message + '</span>';
-  }
-}
 
 /* ============================================================
    이벤트 분석 (재작성 - CSV + 캘린더 + Singular 결합)
