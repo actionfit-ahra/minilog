@@ -2343,6 +2343,7 @@
       <input type="text" id="cfg-sheet-url" value="https://script.google.com/a/macros/actionfit.kr/s/AKfycbymm1WDUadsf2Bl02ITEVKYmovfD5ya2Eh3fesw3XYDWXcuNETI1obMHoR34v4Co6Q/exec" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:9px 11px; font-family:var(--font-mono); font-size:11px; border-radius: 4px;">
       <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
         <button class="btn primary" data-action="syncFromSheet">📥 신규만 불러오기 (빠름)</button>
+        <button class="btn" data-action="loadOlderData">📚 과거 데이터 추가</button>
         <button class="btn" data-action="forceRefreshSheet">🔄 전체 새로고침</button>
         <button class="btn" data-action="triggerFullSync">⚡ 싱귤러+슬랙 동기화</button>
         <button class="btn" data-action="triggerSingularSync">📊 싱귤러만</button>
@@ -2881,10 +2882,16 @@ function renderTabs() {
     });
   }
 
-  // 3. 해당 서브뷰만 표시
+  // 3. 해당 서브뷰만 표시 + 지연 렌더
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   const target = document.getElementById('view-' + NAV.sub);
-  if (target) target.classList.add('active');
+  if (target) {
+    target.classList.add('active');
+    // 🚀 지연 렌더: 해당 뷰만 렌더
+    if (STATE.raw && STATE.raw.length) {
+      setTimeout(() => renderViewById('view-' + NAV.sub), 0);
+    }
+  }
   window.scrollTo(0, 0);
 }
 
@@ -2913,7 +2920,7 @@ function setupGlobalFilter() {
       // has-filter 클래스 토글 (전체 아닐 때 강조)
       if (id === 'gf-period') el.classList.toggle('has-filter', +v !== 14);
       else el.classList.toggle('has-filter', v !== '');
-      if (STATE.raw.length) renderAll();
+      if (STATE.raw.length) invalidateRenderCache();
     });
   });
   // 비교 모드 토글
@@ -2921,7 +2928,7 @@ function setupGlobalFilter() {
   if (cmp) {
     cmp.addEventListener('change', () => {
       STATE.filter.compare = cmp.checked;
-      if (STATE.raw.length) renderAll();
+      if (STATE.raw.length) invalidateRenderCache();
     });
   }
 }
@@ -3151,65 +3158,89 @@ async function syncFromSheet(forceRefresh) {
   const url = getSheetUrl();
   if (!url) { setStatus('URL을 먼저 입력하세요', 'err'); return; }
 
-  // 캐시 확인 (forceRefresh가 false이고 캐시 있으면 신규만 요청)
   const cached = loadCache();
   let since = '';
   if (!forceRefresh && cached && cached.meta && cached.meta.savedAt) {
     const cutoff = new Date(cached.meta.savedAt);
-    cutoff.setDate(cutoff.getDate() - 2); // 2일 겹치게
+    cutoff.setDate(cutoff.getDate() - 2);
     since = cutoff.toISOString().slice(0, 10);
-    setStatus(`📡 신규 데이터만 불러오는 중 (${since} 이후)`, 'info');
+    setStatus(`📡 신규 데이터만 (${since} 이후)`, 'info');
   } else {
-    setStatus('📡 전체 데이터 불러오는 중... (최대 30초)', 'info');
+    setStatus('📡 전체 데이터 불러오는 중...', 'info');
   }
 
-  try {
-    const actionUrl = '?action=getAllData' + (since ? '&since=' + since : '');
-    const res = await authFetch(url, actionUrl);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      throw new Error('JSON 파싱 실패 (응답 크기: ' + Math.round(text.length / 1024) + 'KB)');
-    }
-    if (data.error) throw new Error(data.error);
+  const PAGE_SIZE = 3000; // 한번에 3000행씩
 
-    // 증분 업데이트 vs 전체 교체
+  try {
+    let page = 0;
+    let allRawdata = [];
+    let firstData = null;
+    let hasMore = true;
+    let totalExpected = 0;
+
+    while (hasMore) {
+      const actionUrl = '?action=getAllData' +
+        (since ? '&since=' + since : '') +
+        '&page=' + page +
+        '&pageSize=' + PAGE_SIZE;
+
+      const res = await authFetch(url, actionUrl);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); }
+      catch (e) { throw new Error('JSON 파싱 실패 (' + Math.round(text.length / 1024) + 'KB)'); }
+      if (data.error) throw new Error(data.error);
+
+      allRawdata = allRawdata.concat(data.rawdata || []);
+      if (page === 0) {
+        firstData = data; // 슬랙/오퍼월은 첫 페이지에만 있음
+        totalExpected = data.total || 0;
+      }
+      hasMore = data.hasMore;
+      page++;
+
+      // 진행률 표시
+      const pct = totalExpected > 0 ? Math.min(100, Math.round(allRawdata.length / totalExpected * 100)) : 0;
+      setStatus(`📡 로딩 중... ${allRawdata.length}/${totalExpected}행 (${pct}%)`, 'info');
+
+      // 안전장치: 100페이지 넘으면 강제 중단
+      if (page > 100) { hasMore = false; break; }
+    }
+
+    // 최종 데이터 조합
+    const finalData = firstData || {};
+    finalData.rawdata = allRawdata;
+
+    // 증분 업데이트 (캐시에 병합)
     if (since && cached && cached.data) {
-      // 기존 캐시에 병합 (키: Date+Source+App+OS+Country)
       const existingKey = r => [r.Date, r.Source, r.App, r.OS, r.Country].join('|');
       const newMap = new Map();
       (cached.data.rawdata || []).forEach(r => newMap.set(existingKey(r), r));
-      (data.rawdata || []).forEach(r => newMap.set(existingKey(r), r)); // 신규가 덮어씀
-      data.rawdata = [...newMap.values()];
+      (finalData.rawdata || []).forEach(r => newMap.set(existingKey(r), r));
+      finalData.rawdata = [...newMap.values()];
 
-      // 슬랙도 병합 (timestamp 기준 유니크)
       ['campaign', 'schedule', 'build'].forEach(k => {
         const oldList = (cached.data.slack && cached.data.slack[k]) || [];
-        const newList = (data.slack && data.slack[k]) || [];
+        const newList = (finalData.slack && finalData.slack[k]) || [];
         const tsSet = new Set(oldList.map(x => x.timestamp));
         const merged = [...oldList];
-        newList.forEach(x => {
-          if (!tsSet.has(x.timestamp)) merged.push(x);
-        });
-        if (!data.slack) data.slack = {};
-        data.slack[k] = merged;
+        newList.forEach(x => { if (!tsSet.has(x.timestamp)) merged.push(x); });
+        if (!finalData.slack) finalData.slack = {};
+        finalData.slack[k] = merged;
       });
     }
 
-    applyData(data);
-    saveCache(data);
+    applyData(finalData);
+    saveCache(finalData);
 
-    const rows = (data.rawdata || []).length;
-    const slkCount = ((data.slack && data.slack.campaign) || []).length +
-                     ((data.slack && data.slack.schedule) || []).length +
-                     ((data.slack && data.slack.build) || []).length;
-    setStatus(`✅ 완료 · 로우데이터 ${rows}행 · 슬랙 ${slkCount}건` + (since ? ' (증분 업데이트)' : ''), 'ok');
+    const rows = (finalData.rawdata || []).length;
+    const slkCount = ((finalData.slack && finalData.slack.campaign) || []).length +
+                     ((finalData.slack && finalData.slack.schedule) || []).length +
+                     ((finalData.slack && finalData.slack.build) || []).length;
+    setStatus(`✅ 완료 · ${rows}행 · 슬랙 ${slkCount}건 (${page}페이지)` + (since ? ' (증분)' : ''), 'ok');
   } catch (e) {
     setStatus('불러오기 실패: ' + e.message, 'err');
-    // 네트워크 실패 시 캐시라도 보여주기
     if (cached && cached.data && STATE.raw.length === 0) {
       applyData(cached.data);
       setStatus('📦 캐시 데이터 사용 (오프라인 모드)', 'warn');
@@ -3221,6 +3252,68 @@ async function syncFromSheet(forceRefresh) {
 async function forceRefreshSheet() {
   clearCache();
   await syncFromSheet(true);
+}
+
+// 📚 과거 데이터 추가 로드 (지금 데이터보다 이전 기간)
+async function loadOlderData() {
+  const url = getSheetUrl();
+  if (!url) { setStatus('URL을 먼저 입력하세요', 'err'); return; }
+
+  // 현재 가진 데이터 중 가장 오래된 날짜
+  const dates = STATE.raw.map(r => r.Date).filter(d => d).sort();
+  const oldest = dates[0];
+  if (!oldest) {
+    setStatus('먼저 데이터를 불러와주세요', 'warn');
+    return;
+  }
+
+  // 가장 오래된 날 기준 30일 더 과거 ~ 하루 전
+  const oldestDate = new Date(oldest);
+  const until = new Date(oldestDate);
+  until.setDate(until.getDate() - 1);
+  const since = new Date(until);
+  since.setDate(since.getDate() - 30);
+
+  const sinceStr = since.toISOString().slice(0, 10);
+  const untilStr = until.toISOString().slice(0, 10);
+
+  setStatus(`📚 과거 데이터 로드: ${sinceStr} ~ ${untilStr}`, 'info');
+
+  try {
+    const res = await authFetch(url, `?action=getAllData&since=${sinceStr}&until=${untilStr}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const newRows = (data.rawdata || []).length;
+    if (newRows === 0) {
+      setStatus(`📚 ${sinceStr} ~ ${untilStr} 기간에 데이터 없음`, 'warn');
+      return;
+    }
+
+    // 기존에 추가 (중복 제거)
+    const existingKey = r => [r.Date, r.Source, r.App, r.OS, r.Country].join('|');
+    const existingSet = new Set(STATE.raw.map(existingKey));
+    let added = 0;
+    data.rawdata.forEach(r => {
+      if (!existingSet.has(existingKey(r))) {
+        STATE.raw.push(r);
+        added++;
+      }
+    });
+
+    // 캐시 저장
+    const cached = loadCache();
+    if (cached) {
+      cached.data.rawdata = STATE.raw;
+      saveCache(cached.data);
+    }
+
+    setStatus(`✅ ${added}행 추가됨 · 총 ${STATE.raw.length}행 (${sinceStr} ~ 오늘)`, 'ok');
+    renderAll();
+  } catch (e) {
+    setStatus('과거 로드 실패: ' + e.message, 'err');
+  }
 }
 
 async function triggerSingularSync() {
@@ -3439,21 +3532,62 @@ function loadSampleData() {
 }
 
 // ===== 전체 렌더 =====
+// 렌더 상태 추적 (탭별 캐시)
+const RENDER_CACHE = {};
+
 function renderAll() {
   if (!STATE.raw.length) return;
+  // 필수 초기화만
   populateFilters();
   populateNetworkFilter();
-  renderOverview();
-  renderBleed();
-  renderMatrix();
-  renderPerformance();
-  renderNetwork();
-  renderCountry();
-  renderInsights();
-  renderSlack();
-  renderCalendar();
-  renderCalDetail();
-  renderTitles();
+  // 렌더 캐시 초기화 (데이터 바뀌었으므로)
+  for (const k in RENDER_CACHE) delete RENDER_CACHE[k];
+  // 현재 활성 뷰만 렌더 (나머지는 탭 클릭 시 지연 렌더)
+  renderCurrentView();
+}
+
+// 현재 활성 뷰 기준으로 필요한 함수 호출
+function renderCurrentView() {
+  const activeView = document.querySelector('.view.active');
+  if (!activeView) {
+    // 첫 로드: overview 먼저
+    renderOverviewIfNeeded();
+    return;
+  }
+  const id = activeView.id;
+  renderViewById(id);
+}
+
+function renderViewById(id) {
+  // 이미 렌더된 탭은 건너뛰기 (대용량 데이터면 캐시가 중요)
+  if (RENDER_CACHE[id]) return;
+  try {
+    if (id === 'view-overview') renderOverview();
+    else if (id === 'view-bleed') renderBleed();
+    else if (id === 'view-matrix') renderMatrix();
+    else if (id === 'view-performance') renderPerformance();
+    else if (id === 'view-network') renderNetwork();
+    else if (id === 'view-country') renderCountry();
+    else if (id === 'view-insights') renderInsights();
+    else if (id === 'view-slack') renderSlack();
+    else if (id === 'view-calendar') { renderCalendar(); renderCalDetail(); }
+    else if (id === 'view-titles') renderTitles();
+    // eventanalysis는 CSV 업로드 시에만 렌더됨
+    RENDER_CACHE[id] = true;
+  } catch(e) {
+    console.error('renderViewById:', id, e);
+  }
+}
+
+function renderOverviewIfNeeded() {
+  if (RENDER_CACHE['view-overview']) return;
+  try { renderOverview(); RENDER_CACHE['view-overview'] = true; } catch(e) { console.error(e); }
+}
+
+// 필터 변경 시엔 모든 렌더 캐시 무효화
+function invalidateRenderCache() {
+  for (const k in RENDER_CACHE) delete RENDER_CACHE[k];
+  renderCurrentView();
 }
 
 // ===== 종합 =====
@@ -4296,7 +4430,7 @@ function renderCalendar() {
 
   // 날짜별 슬랙 캠페인 이벤트 (전체)
   const eventsByDate = new Map();
-  (STATE.slack && slack.campaign || []).forEach(e => {
+  (STATE.slack && STATE.slack.campaign || []).forEach(e => {
     if (!e.timestamp) return;
     const k = e.timestamp.slice(0, 10);
     if (!eventsByDate.has(k)) eventsByDate.set(k, []);
@@ -4397,7 +4531,7 @@ function renderCalDetail() {
   let html = '';
 
   // 1. 그날의 캠페인 이벤트
-  const events = (STATE.slack && slack.campaign || []).filter(e => e.timestamp && e.timestamp.slice(0, 10) === d);
+  const events = (STATE.slack && STATE.slack.campaign || []).filter(e => e.timestamp && e.timestamp.slice(0, 10) === d);
   const actionOrder = { '신규라이브': 0, '캡조정': 1, '골조정': 2, '소재변경': 3, '종료': 4 };
   events.sort((a, b) => (actionOrder[a.action] || 99) - (actionOrder[b.action] || 99));
 
@@ -5324,7 +5458,7 @@ function renderEventDetail() {
  * 반환: { partnerKey: { attrDays, payouts: { 허들: 단가USD }, source } }
  */
 function parseCampaignPayouts() {
-  const campaigns = (STATE.slack && slack.campaign) || [];
+  const campaigns = (STATE.slack && STATE.slack.campaign) || [];
   if (!campaigns.length) return {};
 
   // 최신부터 (같은 파트너 나중 값이 덮어쓸 수 있게)
@@ -5566,7 +5700,7 @@ function changeCurrency() {
 
 // 슬랙에서 캠페인 설정 다시 불러오기
 function refreshCampaignConfig() {
-  if (!(STATE.slack && slack.campaign || []).length) {
+  if (!(STATE.slack && STATE.slack.campaign || []).length) {
     showErrorToast('슬랙 캠페인 로그가 없습니다. 먼저 구글시트에서 불러오세요.');
     return;
   }
