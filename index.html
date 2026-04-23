@@ -2173,6 +2173,24 @@
 
   <div class="panel">
     <div class="panel-header">
+      <div class="panel-title">📥 싱귤러 CSV 업로드 (Revenue / Retention)</div>
+    </div>
+    <div style="padding: 18px;">
+      <p style="font-size: 13px; color: var(--text); margin-bottom: 12px; line-height: 1.7;">
+        싱귤러 Advertiser Daily Report CSV를 업로드하면 <strong>해당 기간의 Revenue / Retention</strong>이 로우데이터에 반영됩니다.<br>
+        업로드된 기간은 <strong>완전히 덮어씀</strong> (최신 cohort가 반영됨). Cost가 N/A인 경우 기존 Cost가 자동 복구됩니다.
+      </p>
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+        <input type="file" id="sing-csv-input" accept=".csv" style="font-size: 12px;">
+        <button class="btn primary" data-action="uploadSingularCSV">업로드</button>
+        <button class="btn" data-action="previewSingularCSV">미리보기만</button>
+      </div>
+      <div id="sing-csv-status" style="margin-top: 10px; padding: 10px; background: var(--bg-elev); border-radius: 4px; font-size: 12px; color: var(--text-dim); min-height: 20px; font-family: var(--font-mono); line-height: 1.7;">CSV 파일을 선택하세요. Source / App / OS / Date / Installs / Revenue D1~D7 / Retention 등이 자동 파싱됩니다.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
       <div class="panel-title">📁 CSV 직접 업로드 (백업)</div>
     </div>
     <div style="padding: 18px;">
@@ -2956,6 +2974,168 @@ function clearCache() {
     localStorage.removeItem(CACHE_META_KEY);
   } catch(e) {}
 }
+
+
+// ============================================================
+//  📥 싱귤러 CSV 업로드
+// ============================================================
+
+function parseSingularCSVText(text) {
+  // BOM 제거
+  text = text.replace(/^\uFEFF/, '');
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return { headers: [], rows: [] };
+
+  const parseLine = line => {
+    const out = [];
+    let cur = '';
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (c === ',' && !inQ) {
+        out.push(cur);
+        cur = '';
+      } else cur += c;
+    }
+    out.push(cur);
+    return out;
+  };
+
+  const headers = parseLine(lines[0]).map(h => h.trim());
+  const rows = lines.slice(1).map(line => {
+    const vals = parseLine(line);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = vals[i] !== undefined ? vals[i].trim() : ''; });
+    return obj;
+  });
+  return { headers, rows };
+}
+
+async function previewSingularCSV() {
+  const input = document.getElementById('sing-csv-input');
+  const statusEl = document.getElementById('sing-csv-status');
+  if (!input || !input.files || !input.files[0]) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">CSV 파일을 먼저 선택하세요</span>';
+    return;
+  }
+  const file = input.files[0];
+  if (statusEl) statusEl.textContent = '읽는 중...';
+  try {
+    const text = await file.text();
+    const { headers, rows } = parseSingularCSVText(text);
+    if (!rows.length) {
+      statusEl.innerHTML = '<span style="color:var(--bad);">파싱된 행 없음</span>';
+      return;
+    }
+    // 기간, 앱, 소스 요약
+    const dates = rows.map(r => (r.Date || '').slice(0, 10)).filter(Boolean).sort();
+    const minDate = dates[0];
+    const maxDate = dates[dates.length - 1];
+    const apps = [...new Set(rows.map(r => r.App).filter(Boolean))];
+    const sources = [...new Set(rows.map(r => r.Source).filter(Boolean))];
+    const excludeCount = rows.filter(r => ['Unattributed Ad Revenue', 'Untrusted'].includes(String(r.Source || '').trim())).length;
+    const revCount = rows.filter(r => r['Net Total Revenue 1d'] && r['Net Total Revenue 1d'] !== 'N/A' && +r['Net Total Revenue 1d'] > 0).length;
+
+    statusEl.innerHTML =
+      '<div style="color:var(--text); line-height:1.8;">' +
+      '<strong>파일</strong>: ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)<br>' +
+      '<strong>총 행</strong>: ' + rows.length + '행<br>' +
+      '<strong>기간</strong>: ' + minDate + ' ~ ' + maxDate + '<br>' +
+      '<strong>앱</strong>: ' + apps.length + '개 (' + apps.slice(0, 5).join(', ') + (apps.length > 5 ? ' 외' : '') + ')<br>' +
+      '<strong>소스</strong>: ' + sources.length + '개 (' + sources.slice(0, 6).join(', ') + (sources.length > 6 ? ' 외' : '') + ')<br>' +
+      '<strong>Revenue 있음</strong>: ' + revCount + '행<br>' +
+      (excludeCount > 0 ? '<span style="color:var(--warn);">⚠ Unattributed/Untrusted 제외 예정: ' + excludeCount + '행</span><br>' : '') +
+      '<strong>컬럼</strong>: ' + headers.length + '개 (' + headers.slice(0, 8).join(', ') + (headers.length > 8 ? ' ...' : '') + ')' +
+      '</div>';
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--bad);">오류: ' + e.message + '</span>';
+  }
+}
+
+async function uploadSingularCSV() {
+  const input = document.getElementById('sing-csv-input');
+  const statusEl = document.getElementById('sing-csv-status');
+  if (!input || !input.files || !input.files[0]) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">CSV 파일을 먼저 선택하세요</span>';
+    return;
+  }
+  const file = input.files[0];
+  const url = document.getElementById('cfg-sheet-url')?.value?.trim();
+  if (!url) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">Apps Script URL 없음</span>';
+    return;
+  }
+  const pw = sessionStorage.getItem('minilog-pw') || '';
+
+  if (statusEl) statusEl.textContent = '읽고 파싱 중...';
+  let rows;
+  try {
+    const text = await file.text();
+    const parsed = parseSingularCSVText(text);
+    rows = parsed.rows;
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--bad);">CSV 파싱 실패: ' + e.message + '</span>';
+    return;
+  }
+
+  if (!rows.length) {
+    statusEl.innerHTML = '<span style="color:var(--bad);">파싱된 행 없음</span>';
+    return;
+  }
+
+  // 기간 정보
+  const dates = rows.map(r => (r.Date || '').slice(0, 10)).filter(Boolean);
+  const minDate = dates.reduce((a, b) => a < b ? a : b, '9999');
+  const maxDate = dates.reduce((a, b) => a > b ? a : b, '0000');
+
+  if (!confirm('업로드 확인\n\n기간: ' + minDate + ' ~ ' + maxDate + '\n행 수: ' + rows.length + '\n\n이 기간의 기존 데이터는 덮어쓰여집니다. 진행?')) {
+    statusEl.textContent = '취소됨';
+    return;
+  }
+
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-dim);">전송 중... (' + rows.length + '행, 몇 초 소요)</span>';
+
+  try {
+    const body = new URLSearchParams();
+    body.append('action', 'uploadSingularCSV');
+    body.append('pw', pw);
+    body.append('rows', JSON.stringify(rows));
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      body: body
+    });
+    const result = await resp.json();
+
+    if (result.ok) {
+      statusEl.innerHTML =
+        '<div style="color:var(--good); line-height:1.8;">' +
+        '<strong>✓ 업로드 완료</strong><br>' +
+        '기간: ' + result.dateRange + '<br>' +
+        '새로 저장: ' + result.uploaded + '행<br>' +
+        '제거된 기존 행: ' + result.removed + '행<br>' +
+        '유지된 행: ' + result.kept + '행<br>' +
+        '전체: ' + result.total + '행' +
+        (result.excluded ? '<br>제외 (Unattributed/Untrusted): ' + result.excluded + '행' : '') +
+        (result.notWhitelisted ? '<br>화이트리스트 아님: ' + result.notWhitelisted + '행' : '') +
+        '</div>';
+
+      // 캐시 갱신 후 재로드
+      setTimeout(() => {
+        if (typeof clearCache === 'function') clearCache();
+        if (typeof syncFromSheet === 'function') syncFromSheet(true);
+      }, 1500);
+    } else {
+      statusEl.innerHTML = '<span style="color:var(--bad);">실패: ' + (result.error || 'unknown') + '</span>';
+    }
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--bad);">네트워크 오류: ' + e.message + '</span>';
+  }
+}
+
 
 // 캐시에서 먼저 로드 시도 (페이지 시작 시)
 function tryLoadFromCache() {
