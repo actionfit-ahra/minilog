@@ -1951,18 +1951,26 @@
   <div style="display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap;">
     <label style="font-size: 12px; color: var(--text-dim);">필터:</label>
     <select id="lc-filter-status" class="gf-select" style="min-width: 140px;">
-      <option value="all">전체 타이틀</option>
-      <option value="active" selected>진행 중만</option>
+      <option value="all" selected>전체 타이틀</option>
+      <option value="active">진행 중만</option>
       <option value="holding">대기/홀딩만</option>
       <option value="silent">캠페인 없음</option>
+    </select>
+    <select id="lc-filter-network" class="gf-select" style="min-width: 140px;">
+      <option value="">네트워크 전체</option>
+    </select>
+    <select id="lc-filter-type" class="gf-select" style="min-width: 110px;">
+      <option value="">싱글/멀티 전체</option>
+      <option value="single">싱글만</option>
+      <option value="multi">멀티만</option>
     </select>
     <select id="lc-filter-sort" class="gf-select" style="min-width: 140px;">
       <option value="recent">최근 활동순</option>
       <option value="name">타이틀명순</option>
       <option value="count">캠페인 수</option>
     </select>
-    <input type="text" id="lc-filter-search" placeholder="🔍 타이틀 검색..." class="gf-select" style="min-width: 180px;">
-    <span style="font-size: 11px; color: var(--text-faint); margin-left: auto;">최근 14일 슬랙 메시지 기반</span>
+    <input type="text" id="lc-filter-search" placeholder="타이틀 검색..." class="gf-select" style="min-width: 180px;">
+    <span style="font-size: 11px; color: var(--text-faint); margin-left: auto;">전체 이력 누적 · 14일 내 상태 판정</span>
   </div>
 
   <div id="lc-title-cards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px;"></div>
@@ -2000,13 +2008,13 @@
 
       <!-- Singular D1 Rev CSV -->
       <div class="kpi-card">
-        <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">2. Singular D1 Rev (CSV)</div>
+        <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">2. Singular D1 Rev (선택)</div>
         <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.5;">
-          동일 기간의 D1 Revenue<br>
-          컬럼: <code>App</code>, <code>Source</code>, <code>Campaign</code>, <code>Revenue 1d</code>
+          기본은 대시보드 데이터를 자동 사용<br>
+          별도 CSV가 있으면 업로드 가능
         </div>
         <input type="file" id="ev-upload-singular" accept=".csv" style="font-size: 12px; width: 100%;">
-        <div id="ev-status-singular" style="margin-top: 8px; font-size: 11px; color: var(--text-dim);">선택사항 · 없으면 ROI 계산 안 됨</div>
+        <div id="ev-status-singular" style="margin-top: 8px; font-size: 11px; color: var(--text-dim);">대시보드 데이터 자동 사용 중</div>
       </div>
 
       <!-- 캘린더 -->
@@ -2739,7 +2747,7 @@ function setupGlobalFilter() {
 setupGlobalFilter();
 
 // 진행 중 캠페인 필터
-['lc-filter-status', 'lc-filter-sort', 'lc-filter-search'].forEach(id => {
+['lc-filter-status', 'lc-filter-network', 'lc-filter-type', 'lc-filter-sort', 'lc-filter-search'].forEach(id => {
   document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     if (el) {
@@ -3399,7 +3407,7 @@ function renderViewById(id) {
     else if (id === 'view-country') renderCountry();
     else if (id === 'view-insights') renderInsights();
     else if (id === 'view-slack') renderSlack();
-    else if (id === 'view-calendar') { renderCalendar(); renderCalDetail(); }
+    else if (id === 'view-calendar') { renderCalendar(); }
     else if (id === 'view-titles') renderTitles();
     else if (id === 'view-livecampaign') renderLiveCampaign();
     // eventanalysis는 CSV 업로드 시에만 렌더됨
@@ -4906,14 +4914,61 @@ function renderLiveCampaign() {
   if ($('lc-silent')) $('lc-silent').textContent = silentTitles;
 
   // 필터 적용
-  const statusFilter = $('lc-filter-status') ? $('lc-filter-status').value : 'active';
+  const statusFilter = $('lc-filter-status') ? $('lc-filter-status').value : 'all';
+  const networkFilter = $('lc-filter-network') ? $('lc-filter-network').value : '';
+  const typeFilter = $('lc-filter-type') ? $('lc-filter-type').value : '';
   const sortBy = $('lc-filter-sort') ? $('lc-filter-sort').value : 'recent';
   const search = ($('lc-filter-search') ? $('lc-filter-search').value : '').toLowerCase().trim();
+
+  // 네트워크 필터 드롭다운 옵션 채우기 (전체 네트워크 수집)
+  const allNetworks = new Set();
+  titleStates.forEach(t => {
+    t.byNetwork.forEach(([net]) => { if (net && net !== '—') allNetworks.add(net); });
+  });
+  const netFilterEl = $('lc-filter-network');
+  if (netFilterEl) {
+    const currentVal = netFilterEl.value;
+    const options = ['<option value="">네트워크 전체</option>']
+      .concat([...allNetworks].sort().map(n => `<option value="${n}">${n}</option>`));
+    // 옵션 수가 변했거나 첫 렌더면 다시
+    if (netFilterEl.options.length !== options.length) {
+      netFilterEl.innerHTML = options.join('');
+      netFilterEl.value = currentVal || '';
+    }
+  }
+
+  // 각 타이틀에 싱글/멀티 판정 추가
+  titleStates.forEach(t => {
+    // 네트워크별 이벤트 조건 개수 계산 (전체 이력 기준)
+    const eventsByNet = new Map();
+    t.campaigns.forEach(c => {
+      const net = c.network || '—';
+      if (!c.event) return;
+      if (!eventsByNet.has(net)) eventsByNet.set(net, new Set());
+      eventsByNet.get(net).add(c.event);
+    });
+    let hasMulti = false, hasSingle = false;
+    eventsByNet.forEach(set => {
+      if (set.size > 1) hasMulti = true;
+      else if (set.size === 1) hasSingle = true;
+    });
+    t.hasMulti = hasMulti;
+    t.hasSingle = hasSingle;
+  });
 
   let filtered = titleStates;
   if (statusFilter === 'active') filtered = filtered.filter(t => t.status === 'active');
   else if (statusFilter === 'holding') filtered = filtered.filter(t => t.status === 'holding');
   else if (statusFilter === 'silent') filtered = filtered.filter(t => t.status === 'silent');
+
+  if (networkFilter) {
+    filtered = filtered.filter(t =>
+      t.byNetwork.some(([net]) => net === networkFilter)
+    );
+  }
+
+  if (typeFilter === 'single') filtered = filtered.filter(t => t.hasSingle);
+  else if (typeFilter === 'multi') filtered = filtered.filter(t => t.hasMulti);
 
   if (search) {
     filtered = filtered.filter(t => t.app.toLowerCase().indexOf(search) !== -1);
@@ -4939,41 +4994,53 @@ function renderLiveCampaign() {
       silent: '<span style="background:#e5e7eb;color:#6b7280;padding:2px 8px;border-radius:10px;font-size:10px;">조용</span>'
     }[t.status];
 
-    const networks = t.byNetwork.slice(0, 5).map(([net, c]) => {
+    const typeBadges = [];
+    if (t.hasMulti) typeBadges.push('<span style="background:#8b5cf622;color:#8b5cf6;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">멀티</span>');
+    if (t.hasSingle) typeBadges.push('<span style="background:#3b82f622;color:#3b82f6;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">싱글</span>');
+
+    // 네트워크 필터 적용 시: 해당 네트워크만 표시
+    let netList = t.byNetwork;
+    if (networkFilter) netList = netList.filter(([n]) => n === networkFilter);
+
+    const networks = netList.slice(0, 5).map(([net, c]) => {
       const actionColor = {
-        '신규라이브': '#10b981',
-        '재개': '#10b981',
-        '캡조정': '#3b82f6',
-        '골조정': '#3b82f6',
-        '소재변경': '#8b5cf6',
-        '대기': '#f59e0b',
-        '홀딩': '#f59e0b',
-        '종료': '#94a3b8',
-        '기타': '#6b7280'
+        '신규라이브': '#10b981', '재개': '#10b981',
+        '캡조정': '#3b82f6', '골조정': '#3b82f6', '단가조정': '#3b82f6',
+        '소재변경': '#8b5cf6', '이벤트변경': '#8b5cf6',
+        '대기': '#f59e0b', '홀딩': '#f59e0b',
+        '종료': '#94a3b8', '기타': '#6b7280'
       }[c.action] || '#6b7280';
 
       const ts = c.timestamp ? c.timestamp.slice(5, 16) : '';
+      // 네트워크별 싱글/멀티 판정
+      const netEvents = new Set();
+      t.campaigns.filter(x => (x.network || '—') === net && x.event).forEach(x => netEvents.add(x.event));
+      const netTypeBadge = netEvents.size > 1
+        ? '<span style="background:#8b5cf622;color:#8b5cf6;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600;margin-left:4px;">멀티 ' + netEvents.size + '</span>'
+        : (netEvents.size === 1 ? '<span style="background:#3b82f622;color:#3b82f6;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600;margin-left:4px;">싱글</span>' : '');
+
       return `<div style="padding:6px 0; border-bottom:1px solid var(--border); font-size:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <span style="font-weight:600;">${net}</span>
+          <span style="font-weight:600;">${net}${netTypeBadge}</span>
           <span style="background:${actionColor}22; color:${actionColor}; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600;">${c.action || '—'}</span>
         </div>
-        ${c.budget ? `<div style="font-size:11px; color:var(--text-dim); margin-top:3px;">${c.budget}</div>` : ''}
-        <div style="font-size:10px; color:var(--text-faint); margin-top:2px;">${ts} · ${c.author || '—'}${c.os !== '—' ? ' · ' + c.os : ''}${c.country !== '—' ? ' · ' + c.country : ''}</div>
+        ${c.event ? `<div style="font-size:11px; font-weight:600; color:${getNetworkColor ? getNetworkColor(net) : '#64748b'}; margin-top:3px;">${c.event}</div>` : ''}
+        ${c.budget ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${c.budget}</div>` : ''}
+        <div style="font-size:10px; color:var(--text-faint); margin-top:2px;">${ts}${c.country && c.country !== '—' ? ' · ' + c.country : ''}</div>
       </div>`;
     }).join('');
 
-    const moreCount = t.byNetwork.length - 5;
+    const moreCount = netList.length - 5;
 
     return `<div class="kpi-card" style="padding:14px; cursor:pointer;" data-action="showLiveCampaignDetail" data-args="'${t.app.replace(/'/g, "\\'")}'">
       <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px; gap:8px;">
         <div style="font-weight:700; font-size:14px; color:var(--text);">${t.app}</div>
-        ${statusBadge}
+        <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">${typeBadges.join('')}${statusBadge}</div>
       </div>
       <div style="display:flex; gap:12px; margin-bottom:10px; font-size:11px; color:var(--text-dim);">
-        <span>${t.activeCount}</span>
-        <span>${t.holdingCount}</span>
-        <span>${t.endedCount}</span>
+        <span>진행 ${t.activeCount}</span>
+        <span>대기 ${t.holdingCount}</span>
+        <span>종료 ${t.endedCount}</span>
       </div>
       ${networks || '<div style="font-size:11px; color:var(--text-faint); padding:10px 0;">최근 14일간 캠페인 없음</div>'}
       ${moreCount > 0 ? `<div style="text-align:center; font-size:10px; color:var(--text-dim); margin-top:6px;">+${moreCount}개 네트워크 더</div>` : ''}
@@ -4987,10 +5054,6 @@ function showLiveCampaignDetail(app) {
   const related = campaigns.filter(c => c.title === app);
   related.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
 
-  const firstLive = related.filter(c => c.action === '신규라이브').slice(-1)[0];
-  const latest = related[0];
-  const networks = [...new Set(related.map(c => c.network).filter(Boolean))];
-
   const actionColor = a => ({
     '신규라이브': '#10b981', '재개': '#10b981',
     '캡조정': '#3b82f6', '골조정': '#3b82f6', '단가조정': '#3b82f6',
@@ -4999,116 +5062,128 @@ function showLiveCampaignDetail(app) {
     '종료': '#94a3b8', '기타': '#6b7280', '기타변경': '#6b7280'
   })[a] || '#6b7280';
 
-  // 값 있는지 체크
   const has = (v) => v && String(v).trim() && String(v).trim() !== '—';
+  const esc = (v) => String(v || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-  // 요약 정보 (최신 캠페인 기준) - 있는 것만
-  const summaryItems = [];
-  summaryItems.push({ label: '타이틀', value: app });
-  if (latest) {
-    if (has(latest.budget)) summaryItems.push({ label: '예산', value: latest.budget });
-    if (has(latest.daily_cap)) summaryItems.push({ label: '데일리 캡', value: latest.daily_cap });
-    if (has(latest.kpi)) summaryItems.push({ label: 'KPI', value: latest.kpi });
-    if (has(latest.campaign_name)) summaryItems.push({ label: '캠페인명', value: latest.campaign_name });
-    if (has(latest.event)) summaryItems.push({ label: '이벤트', value: latest.event });
-  }
+  // 네트워크별 그룹핑
+  const byNet = new Map();
+  related.forEach(c => {
+    const n = c.network || '—';
+    if (!byNet.has(n)) byNet.set(n, []);
+    byNet.get(n).push(c);
+  });
 
-  const summaryTable = `
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:10px; margin-bottom:20px;">
-      ${summaryItems.map(r => `
-        <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px 14px;">
-          <div style="font-size:11px; color:var(--text-dim); margin-bottom:3px; font-weight:500;">${r.label}</div>
-          <div style="font-size:13px; color:var(--text); font-weight:500; word-break:break-all;">${r.value}</div>
-        </div>
-      `).join('')}
-    </div>
-  `;
+  // 네트워크별 상태 판정 (싱글/멀티 판단용 이벤트 조건 집계)
+  const netSections = [];
+  byNet.forEach((rows, net) => {
+    const latest = rows[0];
+    const uniqueEvents = [...new Set(rows.map(r => r.event).filter(Boolean))];
+    const isMulti = uniqueEvents.length > 1;
+    const tag = isMulti ? '멀티' : (uniqueEvents.length === 1 ? '싱글' : '—');
+    const firstLive = rows.filter(r => r.action === '신규라이브').slice(-1)[0];
+    netSections.push({ net, rows, latest, uniqueEvents, isMulti, tag, firstLive });
+  });
+  // 활성 우선
+  netSections.sort((a, b) => {
+    const aActive = a.latest.action !== '종료' ? 0 : 1;
+    const bActive = b.latest.action !== '종료' ? 0 : 1;
+    return aActive - bActive;
+  });
 
-  // 어떤 컬럼에 데이터가 있는지 체크 (전체 이력 기준)
-  const cols = {
-    network: related.some(c => has(c.network)),
-    os_country: related.some(c => has(c.os) || has(c.country)),
-    budget: related.some(c => has(c.budget)),
-    daily_cap: related.some(c => has(c.daily_cap)),
-    kpi: related.some(c => has(c.kpi)),
-    campaign_name: related.some(c => has(c.campaign_name)),
-    event: related.some(c => has(c.event)),
-    author: related.some(c => has(c.author))
-  };
+  const firstLiveOverall = related.filter(c => c.action === '신규라이브').slice(-1)[0];
 
-  const historyRows = related.map(c => {
-    const ts = c.timestamp ? String(c.timestamp).replace(/T/, ' ').slice(0, 16) : '';
-    const actionBadge = `<span style="background:${actionColor(c.action)}22; color:${actionColor(c.action)}; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; white-space:nowrap;">${c.action || '—'}</span>`;
-    
-    const tds = [];
-    tds.push(`<td style="padding:8px 10px; font-size:11px; white-space:nowrap; color:var(--text-dim);">${ts}</td>`);
-    if (cols.network) tds.push(`<td style="padding:8px 10px; font-size:12px; font-weight:600;">${has(c.network) ? c.network : ''}</td>`);
-    tds.push(`<td style="padding:8px 10px;">${actionBadge}</td>`);
-    if (cols.os_country) {
-      const osC = [has(c.os) ? c.os : '', has(c.country) ? c.country : ''].filter(Boolean).join(' · ');
-      tds.push(`<td style="padding:8px 10px; font-size:11px; color:var(--text-dim);">${osC}</td>`);
-    }
-    if (cols.budget) tds.push(`<td style="padding:8px 10px; font-size:11px;">${has(c.budget) ? c.budget : ''}</td>`);
-    if (cols.daily_cap) tds.push(`<td style="padding:8px 10px; font-size:11px;">${has(c.daily_cap) ? c.daily_cap : ''}</td>`);
-    if (cols.kpi) tds.push(`<td style="padding:8px 10px; font-size:11px;">${has(c.kpi) ? c.kpi : ''}</td>`);
-    if (cols.campaign_name) tds.push(`<td style="padding:8px 10px; font-size:10px; font-family:monospace; color:var(--text-dim); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${(c.campaign_name || '').replace(/"/g, '&quot;')}">${has(c.campaign_name) ? c.campaign_name : ''}</td>`);
-    if (cols.event) tds.push(`<td style="padding:8px 10px; font-size:11px;">${has(c.event) ? c.event : ''}</td>`);
-    if (cols.author) tds.push(`<td style="padding:8px 10px; font-size:10px; color:var(--text-faint);">${has(c.author) ? c.author : ''}</td>`);
-    
-    return `<tr style="border-bottom:1px solid var(--border);">${tds.join('')}</tr>`;
+  const sections = netSections.map(s => {
+    // 각 네트워크 섹션에서 현재 세팅 (최신 기준)
+    const cur = s.latest;
+    const curItems = [];
+    if (has(cur.event)) curItems.push({ label: '이벤트 조건', value: cur.event, hl: true, color: getNetworkColor(s.net) });
+    if (has(cur.kpi)) curItems.push({ label: 'KPI (단가)', value: cur.kpi });
+    if (has(cur.budget)) curItems.push({ label: '예산', value: cur.budget });
+    if (has(cur.daily_cap)) curItems.push({ label: '데일리 캡', value: cur.daily_cap });
+    if (has(cur.campaign_name)) curItems.push({ label: '캠페인명', value: cur.campaign_name, mono: true });
+
+    const curCards = curItems.map(it => {
+      const valStyle = it.hl
+        ? 'font-size:13px; color:' + it.color + '; font-weight:700;'
+        : (it.mono ? 'font-size:11px; font-family:monospace; color:var(--text);' : 'font-size:13px; color:var(--text); font-weight:500;');
+      return '<div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 12px;">' +
+        '<div style="font-size:10px; color:var(--text-dim); margin-bottom:3px; font-weight:500;">' + it.label + '</div>' +
+        '<div style="' + valStyle + ' word-break:break-all;">' + esc(it.value) + '</div>' +
+      '</div>';
+    }).join('');
+
+    // 이력 테이블
+    const historyRows = s.rows.map(c => {
+      const ts = c.timestamp ? String(c.timestamp).replace(/T/, ' ').slice(0, 16) : '';
+      const actionBg = actionColor(c.action);
+      const actionBadge = '<span style="background:' + actionBg + '22; color:' + actionBg + '; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; white-space:nowrap;">' + esc(c.action || '—') + '</span>';
+      const evHl = has(c.event)
+        ? '<span style="color:' + getNetworkColor(s.net) + '; font-weight:700;">' + esc(c.event) + '</span>'
+        : '';
+      const parts = [];
+      if (has(c.event)) parts.push(evHl);
+      if (has(c.kpi)) parts.push('<span style="color:var(--text-dim);">' + esc(c.kpi) + '</span>');
+      if (has(c.budget)) parts.push('<span style="color:var(--text-dim);">' + esc(c.budget) + '</span>');
+      if (has(c.daily_cap)) parts.push('<span style="color:var(--text-dim);">캡 ' + esc(c.daily_cap) + '</span>');
+      if (has(c.campaign_name)) parts.push('<code style="font-size:10px; color:var(--text-faint);">' + esc(c.campaign_name) + '</code>');
+
+      return '<tr style="border-bottom:1px solid var(--border);">' +
+        '<td style="padding:6px 10px; font-size:11px; white-space:nowrap; color:var(--text-dim);">' + ts + '</td>' +
+        '<td style="padding:6px 10px;">' + actionBadge + '</td>' +
+        '<td style="padding:6px 10px; font-size:11px;">' + parts.join(' · ') + '</td>' +
+      '</tr>';
+    }).join('');
+
+    const statusBadge = s.latest.action === '종료'
+      ? '<span style="background:#94a3b822; color:#64748b; padding:2px 10px; border-radius:12px; font-size:10px; font-weight:600;">종료</span>'
+      : '<span style="background:#10b98122; color:#10b981; padding:2px 10px; border-radius:12px; font-size:10px; font-weight:600;">진행중</span>';
+
+    const tagBadge = s.tag !== '—'
+      ? '<span style="background:' + (s.isMulti ? '#8b5cf6' : '#3b82f6') + '22; color:' + (s.isMulti ? '#8b5cf6' : '#3b82f6') + '; padding:2px 10px; border-radius:12px; font-size:10px; font-weight:600; margin-left:6px;">' + s.tag + (s.isMulti ? ' (' + s.uniqueEvents.length + '개 조건)' : '') + '</span>'
+      : '';
+
+    return '<div style="margin-bottom:28px; padding:16px 20px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">' +
+      '<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">' +
+        '<h4 style="margin:0; font-size:15px; font-weight:700; color:' + getNetworkColor(s.net) + ';">' + esc(s.net) + '</h4>' +
+        statusBadge + tagBadge +
+        '<span style="margin-left:auto; font-size:11px; color:var(--text-dim);">' + s.rows.length + '건 이력</span>' +
+      '</div>' +
+      (curItems.length ? '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; margin-bottom:12px;">' + curCards + '</div>' : '') +
+      '<table style="width:100%; border-collapse:collapse; margin-top:8px;">' +
+        '<thead><tr style="background:var(--bg-card); border-bottom:1px solid var(--border);">' +
+          '<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim); width:120px;">시간</th>' +
+          '<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim); width:100px;">액션</th>' +
+          '<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim);">세팅 변경 내용</th>' +
+        '</tr></thead>' +
+        '<tbody>' + historyRows + '</tbody>' +
+      '</table>' +
+    '</div>';
   }).join('');
 
-  // 헤더도 동적으로
-  const headerCells = ['<th style="padding:10px; text-align:left; font-size:11px; font-weight:600; white-space:nowrap;">시간</th>'];
-  if (cols.network) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">네트워크</th>');
-  headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">액션</th>');
-  if (cols.os_country) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">OS / 국가</th>');
-  if (cols.budget) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">예산</th>');
-  if (cols.daily_cap) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">데일리 캡</th>');
-  if (cols.kpi) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">KPI</th>');
-  if (cols.campaign_name) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">캠페인명</th>');
-  if (cols.event) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">이벤트</th>');
-  if (cols.author) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">담당자</th>');
-
-  const colCount = headerCells.length;
-
-  const content = `<div style="padding:24px; max-width:1400px; width:95vw;">
-    <h3 style="margin:0 0 6px; font-size:20px; font-weight:700;">${app}</h3>
-    <div style="font-size:12px; color:var(--text-dim); margin-bottom:20px;">
-      총 ${related.length}건 이력 · 네트워크 ${networks.length}개
-      ${firstLive ? ' · 첫 라이브: ' + String(firstLive.timestamp).slice(0, 10) : ''}
-    </div>
-
-    <div style="font-size:13px; color:var(--text-dim); font-weight:600; margin-bottom:10px;">현재 상태 (최신 기준)</div>
-    ${summaryTable}
-
-    <div style="font-size:13px; color:var(--text-dim); font-weight:600; margin:20px 0 10px;">전체 이력</div>
-    <div style="overflow-x:auto; border:1px solid var(--border); border-radius:6px;">
-      <table style="width:100%; border-collapse:collapse;">
-        <thead>
-          <tr style="background:var(--bg); border-bottom:2px solid var(--border);">
-            ${headerCells.join('')}
-          </tr>
-        </thead>
-        <tbody>${historyRows || `<tr><td colspan="${colCount}" style="padding:30px; text-align:center; color:var(--text-faint);">이력 데이터 없음</td></tr>`}</tbody>
-      </table>
-    </div>
-  </div>`;
+  const content = '<div style="padding:24px; max-width:1100px; width:90vw;">' +
+    '<h3 style="margin:0 0 6px; font-size:20px; font-weight:700;">' + esc(app) + '</h3>' +
+    '<div style="font-size:12px; color:var(--text-dim); margin-bottom:20px;">' +
+      '총 ' + related.length + '건 이력 · 네트워크 ' + byNet.size + '개' +
+      (firstLiveOverall ? ' · 첫 라이브: ' + String(firstLiveOverall.timestamp).slice(0, 10) : '') +
+    '</div>' +
+    (sections || '<div style="padding:40px; text-align:center; color:var(--text-faint);">이력 데이터 없음</div>') +
+  '</div>';
 
   openLiveCampaignModal(content);
 }
+
 
 function openLiveCampaignModal(html) {
   let modal = document.getElementById('lc-modal');
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'lc-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;backdrop-filter:blur(2px);';
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
   }
-  modal.innerHTML = `<div style="background:var(--card); border-radius:8px; max-width:95%; max-height:90vh; overflow:auto; position:relative;">
-    <button data-action="closeLiveCampaignModal" style="position:absolute; top:10px; right:10px; background:transparent; border:none; font-size:20px; cursor:pointer;">✕</button>
+  modal.innerHTML = `<div style="background:var(--bg-card, #fff); color:var(--text, #111); border-radius:8px; max-width:95%; max-height:90vh; overflow:auto; position:relative; box-shadow:0 20px 60px rgba(0,0,0,0.4); border:1px solid var(--border);">
+    <button data-action="closeLiveCampaignModal" style="position:absolute; top:12px; right:12px; background:var(--bg-hover, #f3f4f6); border:1px solid var(--border); font-size:16px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; z-index:2;">✕</button>
     ${html}
   </div>`;
 }
@@ -5265,31 +5340,59 @@ function mapLatestPayout(title, campaignName, network) {
 }
 
 function findD1Rev(app, network, campaign) {
-  const sr = EVENT_STATE2.singularRows;
-  if (!sr.length) return 0;
-  const appLower = (app || '').toLowerCase();
-  const netLower = (network || '').toLowerCase();
-  const campLower = (campaign || '').toLowerCase();
+  // 1. 업로드된 Singular CSV 우선
+  let sources = [];
+  let isUsdRaw = false;
+  if (EVENT_STATE2.singularRows && EVENT_STATE2.singularRows.length) {
+    sources = EVENT_STATE2.singularRows;
+  } else if (STATE.raw && STATE.raw.length) {
+    // 2. 대시보드에 이미 로드된 싱귤러 데이터 — 실제 필드: App, Source, Campaign, 'Net Total Revenue 1d'
+    sources = STATE.raw;
+    isUsdRaw = true;
+  }
+  if (!sources.length) return 0;
+
+  const appLower = (app || '').toLowerCase().trim();
+  const netLower = (network || '').toLowerCase().trim();
+  const campLower = (campaign || '').toLowerCase().trim();
+
   const findVal = (row, keys) => {
-    for (const k of keys) if (row[k] !== undefined && row[k] !== '') return row[k];
+    for (const k of keys) {
+      if (row[k] !== undefined && row[k] !== '' && row[k] !== null) return row[k];
+    }
     return '';
   };
-  const matches = sr.filter(r => {
-    const rApp = String(findVal(r, ['App', 'app', 'App Name'])).toLowerCase();
-    const rCamp = String(findVal(r, ['Campaign', 'campaign', 'Campaign Name'])).toLowerCase();
-    const rNet = String(findVal(r, ['Source', 'source', 'Network', 'partner'])).toLowerCase();
-    if (appLower && rApp && !(rApp.includes(appLower) || appLower.includes(rApp))) return false;
-    if (campLower && rCamp && !rCamp.includes(campLower) && !campLower.includes(rCamp)) return false;
-    if (netLower && rNet && !rNet.includes(netLower)) return false;
+
+  const matches = sources.filter(r => {
+    const rApp = String(findVal(r, ['App', 'app', 'App Name', 'App_Name'])).toLowerCase().trim();
+    const rCamp = String(findVal(r, ['Campaign', 'campaign', 'Campaign Name', 'campaign_name', 'Singular Campaign Name', 'singular campaign name'])).toLowerCase().trim();
+    const rNet = String(findVal(r, ['Source', 'source', 'Network', 'partner', 'Partner'])).toLowerCase().trim();
+
+    // 앱 매칭 (느슨하게)
+    if (appLower && rApp) {
+      if (!(rApp === appLower || rApp.includes(appLower) || appLower.includes(rApp))) return false;
+    }
+    // 캠페인명 매칭 (있을 때만)
+    if (campLower && rCamp) {
+      if (!(rCamp === campLower || rCamp.includes(campLower) || campLower.includes(rCamp))) return false;
+    }
+    // 네트워크 매칭 (느슨하게)
+    if (netLower && rNet) {
+      if (!(rNet === netLower || rNet.includes(netLower) || netLower.includes(rNet))) return false;
+    }
     return true;
   });
+
   let total = 0;
   matches.forEach(r => {
-    const v = findVal(r, ['Revenue 1d', 'Revenue_1d', 'revenue_1d', 'D1 Revenue']);
-    const n = parseFloat(String(v).replace(/[$,]/g, ''));
+    const v = findVal(r, ['Net Total Revenue 1d', 'Revenue 1d', 'Revenue_1d', 'revenue_1d', 'D1 Revenue', 'Revenue (1d)', 'd1_revenue', 'Revenue']);
+    const n = parseFloat(String(v).replace(/[$₩,]/g, ''));
     if (!isNaN(n)) total += n;
   });
-  return total * 1300;
+
+  // STATE.raw는 USD → KRW 1300 환율 적용
+  // 별도 업로드 CSV는 원본 그대로
+  return isUsdRaw ? total * 1300 : total;
 }
 
 function runEventAnalysis() {
