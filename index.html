@@ -5167,44 +5167,115 @@ function renderLiveCampaign() {
 // 타이틀 상세 모달 (클릭시)
 function showLiveCampaignDetail(app) {
   const campaigns = (STATE.slack && STATE.slack.campaign) || [];
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 30);
-  const appLower = app.toLowerCase();
-  const related = campaigns.filter(c => {
-    if (!c.timestamp) return false;
-    const d = new Date(c.timestamp);
-    if (isNaN(d) || d < cutoff) return false;
-    const text = ((c.title || '') + ' ' + (c.note || '') + ' ' + (c.campaign_name || '')).toLowerCase();
-    return text.indexOf(appLower) !== -1;
-  });
-
+  const related = campaigns.filter(c => c.title === app);
   related.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
 
-  const rows = related.map(c => `<tr style="border-bottom:1px solid var(--border);">
-    <td style="padding:6px 8px; font-size:11px; white-space:nowrap;">${c.timestamp || '—'}</td>
-    <td style="padding:6px 8px; font-size:12px;">${c.network || '—'}</td>
-    <td style="padding:6px 8px; font-size:12px; font-weight:600;">${c.action || '—'}</td>
-    <td style="padding:6px 8px; font-size:11px; color:var(--text-dim);">${c.os || '—'} · ${c.country || '—'}</td>
-    <td style="padding:6px 8px; font-size:11px;">${(c.budget || '').slice(0, 40)}</td>
-    <td style="padding:6px 8px; font-size:11px; color:var(--text-faint);">${c.author || '—'}</td>
-  </tr>`).join('');
+  const firstLive = related.filter(c => c.action === '신규라이브').slice(-1)[0];
+  const latest = related[0];
+  const networks = [...new Set(related.map(c => c.network).filter(Boolean))];
 
-  const content = `<div style="padding:20px; max-width:900px;">
-    <h3 style="margin:0 0 12px; font-size:18px;">${app} — 최근 30일 캠페인 이력</h3>
-    <div style="font-size:12px; color:var(--text-dim); margin-bottom:16px;">총 ${related.length}개 메시지</div>
-    <table style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr style="background:var(--bg); border-bottom:2px solid var(--border);">
-          <th style="padding:6px 8px; text-align:left; font-size:11px;">시간</th>
-          <th style="padding:6px 8px; text-align:left; font-size:11px;">네트워크</th>
-          <th style="padding:6px 8px; text-align:left; font-size:11px;">액션</th>
-          <th style="padding:6px 8px; text-align:left; font-size:11px;">OS/국가</th>
-          <th style="padding:6px 8px; text-align:left; font-size:11px;">예산</th>
-          <th style="padding:6px 8px; text-align:left; font-size:11px;">담당자</th>
-        </tr>
-      </thead>
-      <tbody>${rows || '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--text-faint);">데이터 없음</td></tr>'}</tbody>
-    </table>
+  const actionColor = a => ({
+    '신규라이브': '#10b981', '재개': '#10b981',
+    '캡조정': '#3b82f6', '골조정': '#3b82f6', '단가조정': '#3b82f6',
+    '소재변경': '#8b5cf6', '이벤트변경': '#8b5cf6',
+    '대기': '#f59e0b', '홀딩': '#f59e0b',
+    '종료': '#94a3b8', '기타': '#6b7280', '기타변경': '#6b7280'
+  })[a] || '#6b7280';
+
+  // 값 있는지 체크
+  const has = (v) => v && String(v).trim() && String(v).trim() !== '—';
+
+  // 요약 정보 (최신 캠페인 기준) - 있는 것만
+  const summaryItems = [];
+  summaryItems.push({ label: '타이틀', value: app });
+  if (latest) {
+    if (has(latest.budget)) summaryItems.push({ label: '예산', value: latest.budget });
+    if (has(latest.daily_cap)) summaryItems.push({ label: '데일리 캡', value: latest.daily_cap });
+    if (has(latest.kpi)) summaryItems.push({ label: 'KPI', value: latest.kpi });
+    if (has(latest.campaign_name)) summaryItems.push({ label: '캠페인명', value: latest.campaign_name });
+    if (has(latest.event)) summaryItems.push({ label: '이벤트', value: latest.event });
+  }
+
+  const summaryTable = `
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:10px; margin-bottom:20px;">
+      ${summaryItems.map(r => `
+        <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px 14px;">
+          <div style="font-size:11px; color:var(--text-dim); margin-bottom:3px; font-weight:500;">${r.label}</div>
+          <div style="font-size:13px; color:var(--text); font-weight:500; word-break:break-all;">${r.value}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // 어떤 컬럼에 데이터가 있는지 체크 (전체 이력 기준)
+  const cols = {
+    network: related.some(c => has(c.network)),
+    os_country: related.some(c => has(c.os) || has(c.country)),
+    budget: related.some(c => has(c.budget)),
+    daily_cap: related.some(c => has(c.daily_cap)),
+    kpi: related.some(c => has(c.kpi)),
+    campaign_name: related.some(c => has(c.campaign_name)),
+    event: related.some(c => has(c.event)),
+    author: related.some(c => has(c.author))
+  };
+
+  const historyRows = related.map(c => {
+    const ts = c.timestamp ? String(c.timestamp).replace(/T/, ' ').slice(0, 16) : '';
+    const actionBadge = `<span style="background:${actionColor(c.action)}22; color:${actionColor(c.action)}; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; white-space:nowrap;">${c.action || '—'}</span>`;
+    
+    const tds = [];
+    tds.push(`<td style="padding:8px 10px; font-size:11px; white-space:nowrap; color:var(--text-dim);">${ts}</td>`);
+    if (cols.network) tds.push(`<td style="padding:8px 10px; font-size:12px; font-weight:600;">${has(c.network) ? c.network : ''}</td>`);
+    tds.push(`<td style="padding:8px 10px;">${actionBadge}</td>`);
+    if (cols.os_country) {
+      const osC = [has(c.os) ? c.os : '', has(c.country) ? c.country : ''].filter(Boolean).join(' · ');
+      tds.push(`<td style="padding:8px 10px; font-size:11px; color:var(--text-dim);">${osC}</td>`);
+    }
+    if (cols.budget) tds.push(`<td style="padding:8px 10px; font-size:11px;">${has(c.budget) ? c.budget : ''}</td>`);
+    if (cols.daily_cap) tds.push(`<td style="padding:8px 10px; font-size:11px;">${has(c.daily_cap) ? c.daily_cap : ''}</td>`);
+    if (cols.kpi) tds.push(`<td style="padding:8px 10px; font-size:11px;">${has(c.kpi) ? c.kpi : ''}</td>`);
+    if (cols.campaign_name) tds.push(`<td style="padding:8px 10px; font-size:10px; font-family:monospace; color:var(--text-dim); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${(c.campaign_name || '').replace(/"/g, '&quot;')}">${has(c.campaign_name) ? c.campaign_name : ''}</td>`);
+    if (cols.event) tds.push(`<td style="padding:8px 10px; font-size:11px;">${has(c.event) ? c.event : ''}</td>`);
+    if (cols.author) tds.push(`<td style="padding:8px 10px; font-size:10px; color:var(--text-faint);">${has(c.author) ? c.author : ''}</td>`);
+    
+    return `<tr style="border-bottom:1px solid var(--border);">${tds.join('')}</tr>`;
+  }).join('');
+
+  // 헤더도 동적으로
+  const headerCells = ['<th style="padding:10px; text-align:left; font-size:11px; font-weight:600; white-space:nowrap;">시간</th>'];
+  if (cols.network) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">네트워크</th>');
+  headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">액션</th>');
+  if (cols.os_country) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">OS / 국가</th>');
+  if (cols.budget) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">예산</th>');
+  if (cols.daily_cap) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">데일리 캡</th>');
+  if (cols.kpi) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">KPI</th>');
+  if (cols.campaign_name) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">캠페인명</th>');
+  if (cols.event) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">이벤트</th>');
+  if (cols.author) headerCells.push('<th style="padding:10px; text-align:left; font-size:11px; font-weight:600;">담당자</th>');
+
+  const colCount = headerCells.length;
+
+  const content = `<div style="padding:24px; max-width:1400px; width:95vw;">
+    <h3 style="margin:0 0 6px; font-size:20px; font-weight:700;">${app}</h3>
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:20px;">
+      총 ${related.length}건 이력 · 네트워크 ${networks.length}개
+      ${firstLive ? ' · 첫 라이브: ' + String(firstLive.timestamp).slice(0, 10) : ''}
+    </div>
+
+    <div style="font-size:13px; color:var(--text-dim); font-weight:600; margin-bottom:10px;">현재 상태 (최신 기준)</div>
+    ${summaryTable}
+
+    <div style="font-size:13px; color:var(--text-dim); font-weight:600; margin:20px 0 10px;">전체 이력</div>
+    <div style="overflow-x:auto; border:1px solid var(--border); border-radius:6px;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="background:var(--bg); border-bottom:2px solid var(--border);">
+            ${headerCells.join('')}
+          </tr>
+        </thead>
+        <tbody>${historyRows || `<tr><td colspan="${colCount}" style="padding:30px; text-align:center; color:var(--text-faint);">이력 데이터 없음</td></tr>`}</tbody>
+      </table>
+    </div>
   </div>`;
 
   openLiveCampaignModal(content);
