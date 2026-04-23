@@ -1230,6 +1230,81 @@
 </head>
 <body data-theme="light">
 
+<!-- 🔐 로그인 게이트 -->
+<div id="auth-gate" style="position: fixed; inset: 0; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+  <div style="background: white; border-radius: 12px; padding: 40px 32px; max-width: 380px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="font-size: 40px; margin-bottom: 8px;">🔒</div>
+      <h2 style="margin: 0 0 6px; font-size: 22px; color: #1a1a2e; font-weight: 700;">미니로그 접근</h2>
+      <p style="margin: 0; font-size: 13px; color: #666;">회사 전용 대시보드입니다</p>
+    </div>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-size: 12px; color: #555; margin-bottom: 6px; font-weight: 500;">비밀번호</label>
+      <input type="password" id="auth-password" placeholder="비밀번호 입력" autocomplete="current-password"
+        style="width: 100%; padding: 12px 14px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; transition: border-color 0.2s;"
+        onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e0e0e0'">
+    </div>
+    <button id="auth-submit"
+      style="width: 100%; padding: 13px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+      onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+      로그인
+    </button>
+    <div id="auth-error" style="margin-top: 12px; color: #dc2626; font-size: 12px; text-align: center; min-height: 16px;"></div>
+    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee; font-size: 11px; color: #999; text-align: center; line-height: 1.6;">
+      비밀번호는 회사 슬랙 #minilog 채널에서 확인<br>
+      문의: UA 담당자
+    </div>
+  </div>
+</div>
+
+<script>
+// 🔐 인증 로직
+(function() {
+  // 이미 인증됐는지 확인 (sessionStorage)
+  if (sessionStorage.getItem('minilog-auth') === 'ok') {
+    document.getElementById('auth-gate').style.display = 'none';
+    return;
+  }
+
+  function checkAuth() {
+    const pw = document.getElementById('auth-password').value;
+    const errEl = document.getElementById('auth-error');
+    const btn = document.getElementById('auth-submit');
+    btn.textContent = '확인 중...';
+    btn.disabled = true;
+    errEl.textContent = '';
+
+    // Apps Script에 검증 요청
+    const url = 'https://script.google.com/a/macros/actionfit.kr/s/AKfycbymm1WDUadsf2Bl02ITEVKYmovfD5ya2Eh3fesw3XYDWXcuNETI1obMHoR34v4Co6Q/exec';
+    fetch(url + '?action=auth&pw=' + encodeURIComponent(pw))
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          sessionStorage.setItem('minilog-auth', 'ok');
+          sessionStorage.setItem('minilog-pw', pw); // API 호출에 사용
+          document.getElementById('auth-gate').style.display = 'none';
+        } else {
+          errEl.textContent = '❌ ' + (data.error || '비밀번호가 틀렸습니다');
+          btn.textContent = '로그인';
+          btn.disabled = false;
+        }
+      })
+      .catch(e => {
+        errEl.textContent = '❌ 서버 연결 실패: ' + e.message;
+        btn.textContent = '로그인';
+        btn.disabled = false;
+      });
+  }
+
+  document.getElementById('auth-submit').addEventListener('click', checkAuth);
+  document.getElementById('auth-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') checkAuth();
+  });
+  // 첫 포커스
+  setTimeout(() => document.getElementById('auth-password').focus(), 100);
+})();
+</script>
+
 <header>
   <div class="topbar">
     <div class="brand">
@@ -2267,11 +2342,13 @@
       <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 6px; font-weight: 500;">Apps Script 웹앱 URL</label>
       <input type="text" id="cfg-sheet-url" value="https://script.google.com/a/macros/actionfit.kr/s/AKfycbymm1WDUadsf2Bl02ITEVKYmovfD5ya2Eh3fesw3XYDWXcuNETI1obMHoR34v4Co6Q/exec" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:9px 11px; font-family:var(--font-mono); font-size:11px; border-radius: 4px;">
       <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
-        <button class="btn primary" data-action="syncFromSheet">📥 구글시트에서 불러오기</button>
-        <button class="btn" data-action="triggerFullSync">🔄 전체 동기화 (싱귤러+슬랙)</button>
+        <button class="btn primary" data-action="syncFromSheet">📥 신규만 불러오기 (빠름)</button>
+        <button class="btn" data-action="forceRefreshSheet">🔄 전체 새로고침</button>
+        <button class="btn" data-action="triggerFullSync">⚡ 싱귤러+슬랙 동기화</button>
         <button class="btn" data-action="triggerSingularSync">📊 싱귤러만</button>
         <button class="btn" data-action="triggerSlackSync">💬 슬랙만</button>
         <button class="btn" data-action="testConnection">🔍 연결 테스트</button>
+        <button class="btn" data-action="clearCache">🗑 캐시 삭제</button>
         <button class="btn" data-action="showSetupGuide">📖 설정 가이드</button>
       </div>
       <div id="sheet-status" style="margin-top: 12px; padding: 10px; background: var(--bg-elev); border-radius: 4px; font-size: 12px; color: var(--text-dim); min-height: 20px; font-family: var(--font-mono); line-height: 1.7;">준비됨. 위 버튼을 클릭하세요.</div>
@@ -2336,12 +2413,12 @@
 <script>
 // ===== 전역 에러 핸들러 =====
 window.addEventListener('error', e => {
-  console.error('🔴 JS Error:', e.message, '\n위치:', e.filename + ':' + e.lineno + ':' + e.colno, '\n스택:', e.error?.stack);
+  console.error('🔴 JS Error:', e.message, '\n위치:', e.filename + ':' + e.lineno + ':' + e.colno, '\n스택:', e.error && error.stack);
   showErrorToast('오류: ' + e.message + ' (' + e.lineno + '행)');
 });
 window.addEventListener('unhandledrejection', e => {
   console.error('🔴 Promise Error:', e.reason);
-  showErrorToast('비동기 오류: ' + (e.reason?.message || e.reason));
+  showErrorToast('비동기 오류: ' + (e.reason && reason.message || e.reason));
 });
 function showErrorToast(msg) {
   let toast = document.getElementById('err-toast');
@@ -2353,7 +2430,7 @@ function showErrorToast(msg) {
     document.body.appendChild(toast);
   }
   toast.textContent = '❌ ' + msg + ' (클릭하여 닫기)';
-  setTimeout(() => toast?.remove(), 10000);
+  setTimeout(() => toast && toast.remove(), 10000);
 }
 
 // ===== 전역 클릭 디스패처 (data-action 방식) =====
@@ -2938,6 +3015,14 @@ function getSheetUrl() {
   try { return localStorage.getItem('minilog-sheet-url') || ''; } catch(e) { return ''; }
 }
 
+// 인증 포함 fetch (모든 API 호출에 비밀번호 자동 추가)
+function authFetch(url, actionUrl) {
+  const pw = sessionStorage.getItem('minilog-pw') || '';
+  const sep = actionUrl.includes('?') ? '&' : '?';
+  const fullUrl = url + actionUrl + sep + 'pw=' + encodeURIComponent(pw);
+  return fetch(fullUrl);
+}
+
 function setStatus(msg, type) {
   const el = document.getElementById('sheet-status');
   if (!el) return;
@@ -2956,7 +3041,7 @@ async function testConnection() {
   if (!url) { setStatus('URL을 먼저 입력하세요', 'err'); return; }
   setStatus('Apps Script 연결 테스트 중...', 'info');
   try {
-    const res = await fetch(url + '?action=ping', { redirect: 'follow' });
+    const res = await authFetch(url, '?action=ping');
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); }
@@ -2974,43 +3059,168 @@ async function testConnection() {
   }
 }
 
-async function syncFromSheet() {
+// ===== 로컬 캐시 관리 =====
+const CACHE_KEY = 'minilog-cache-v1';
+const CACHE_META_KEY = 'minilog-cache-meta-v1';
+
+function saveCache(data) {
+  try {
+    // 데이터 크기 체크 (5MB 제한)
+    const json = JSON.stringify(data);
+    if (json.length > 4.5 * 1024 * 1024) {
+      console.warn('캐시 크기 초과, 저장 생략 (', (json.length / 1024 / 1024).toFixed(1), 'MB)');
+      return false;
+    }
+    localStorage.setItem(CACHE_KEY, json);
+    localStorage.setItem(CACHE_META_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      rawRows: (data.rawdata || []).length,
+      slackCount: ((data.slack && data.slack.campaign) || []).length +
+                  ((data.slack && data.slack.schedule) || []).length +
+                  ((data.slack && data.slack.build) || []).length
+    }));
+    return true;
+  } catch (e) {
+    console.warn('캐시 저장 실패:', e.message);
+    return false;
+  }
+}
+
+function loadCache() {
+  try {
+    const json = localStorage.getItem(CACHE_KEY);
+    const meta = localStorage.getItem(CACHE_META_KEY);
+    if (!json) return null;
+    return { data: JSON.parse(json), meta: meta ? JSON.parse(meta) : null };
+  } catch (e) {
+    console.warn('캐시 로드 실패:', e.message);
+    return null;
+  }
+}
+
+function clearCache() {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(CACHE_META_KEY);
+  } catch(e) {}
+}
+
+// 캐시에서 먼저 로드 시도 (페이지 시작 시)
+function tryLoadFromCache() {
+  const cached = loadCache();
+  if (!cached || !cached.data) return false;
+  const { data, meta } = cached;
+  applyData(data);
+  const savedTime = meta && meta.savedAt ? new Date(meta.savedAt).toLocaleString('ko-KR', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+  setStatus('📦 캐시에서 로드됨 (' + savedTime + ' · ' + (meta ? meta.rawRows : '?') + '행) · 최신 데이터 원하면 "불러오기"', 'info');
+  return true;
+}
+
+// 데이터를 STATE에 적용 (재사용)
+function applyData(data) {
+  if (data.rawdata) STATE.raw = data.rawdata;
+  if (data.slack) STATE.slack = data.slack;
+  if (data.offerwall) STATE.offerwall = data.offerwall;
+
+  STATE.raw.forEach(r => { if (!r.Country) r.Country = '기타'; });
+
+  const dates = STATE.raw.map(r => new Date(r.Date)).filter(d => !isNaN(d));
+  if (dates.length) {
+    STATE.today = new Date(Math.max(...dates));
+    STATE.cal_cursor = new Date(STATE.today.getFullYear(), STATE.today.getMonth(), 1);
+    STATE.selected_date = STATE.today.toISOString().slice(0, 10);
+  }
+
+  const s = STATE.slack || {};
+  const slackCount = ((s.campaign || []).length) + ((s.schedule || []).length) + ((s.build || []).length);
+
+  document.getElementById('src-data') && document.getElementById('src-data').classList.add('on');
+  if (slackCount > 0) {
+    const el = document.getElementById('src-slack');
+    if (el) el.classList.add('on');
+  }
+  document.getElementById('last-sync').textContent = 'Sheet · ' + new Date().toTimeString().slice(0, 5);
+  const ob = document.getElementById('onboard-wrap');
+  if (ob) ob.classList.add('hidden');
+  const cw = document.getElementById('content-wrap');
+  if (cw) cw.classList.remove('hidden');
+  renderAll();
+}
+
+async function syncFromSheet(forceRefresh) {
   const url = getSheetUrl();
   if (!url) { setStatus('URL을 먼저 입력하세요', 'err'); return; }
-  setStatus('구글시트에서 데이터 불러오는 중... (최대 30초)', 'info');
+
+  // 캐시 확인 (forceRefresh가 false이고 캐시 있으면 신규만 요청)
+  const cached = loadCache();
+  let since = '';
+  if (!forceRefresh && cached && cached.meta && cached.meta.savedAt) {
+    const cutoff = new Date(cached.meta.savedAt);
+    cutoff.setDate(cutoff.getDate() - 2); // 2일 겹치게
+    since = cutoff.toISOString().slice(0, 10);
+    setStatus(`📡 신규 데이터만 불러오는 중 (${since} 이후)`, 'info');
+  } else {
+    setStatus('📡 전체 데이터 불러오는 중... (최대 30초)', 'info');
+  }
+
   try {
-    const res = await fetch(url + '?action=getAllData');
+    const actionUrl = '?action=getAllData' + (since ? '&since=' + since : '');
+    const res = await authFetch(url, actionUrl);
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error('JSON 파싱 실패 (응답 크기: ' + Math.round(text.length / 1024) + 'KB)');
+    }
     if (data.error) throw new Error(data.error);
 
-    if (data.rawdata) STATE.raw = data.rawdata;
-    if (data.slack) STATE.slack = data.slack;
-    if (data.offerwall) STATE.offerwall = data.offerwall;
+    // 증분 업데이트 vs 전체 교체
+    if (since && cached && cached.data) {
+      // 기존 캐시에 병합 (키: Date+Source+App+OS+Country)
+      const existingKey = r => [r.Date, r.Source, r.App, r.OS, r.Country].join('|');
+      const newMap = new Map();
+      (cached.data.rawdata || []).forEach(r => newMap.set(existingKey(r), r));
+      (data.rawdata || []).forEach(r => newMap.set(existingKey(r), r)); // 신규가 덮어씀
+      data.rawdata = [...newMap.values()];
 
-    STATE.raw.forEach(r => { if (!r.Country) r.Country = '기타'; });
-
-    const dates = STATE.raw.map(r => new Date(r.Date)).filter(d => !isNaN(d));
-    if (dates.length) {
-      STATE.today = new Date(Math.max(...dates));
-      STATE.cal_cursor = new Date(STATE.today.getFullYear(), STATE.today.getMonth(), 1);
-      STATE.selected_date = STATE.today.toISOString().slice(0, 10);
+      // 슬랙도 병합 (timestamp 기준 유니크)
+      ['campaign', 'schedule', 'build'].forEach(k => {
+        const oldList = (cached.data.slack && cached.data.slack[k]) || [];
+        const newList = (data.slack && data.slack[k]) || [];
+        const tsSet = new Set(oldList.map(x => x.timestamp));
+        const merged = [...oldList];
+        newList.forEach(x => {
+          if (!tsSet.has(x.timestamp)) merged.push(x);
+        });
+        if (!data.slack) data.slack = {};
+        data.slack[k] = merged;
+      });
     }
 
-    const slackCount = (STATE.slack?.campaign?.length || 0) +
-                       (STATE.slack?.schedule?.length || 0) +
-                       (STATE.slack?.build?.length || 0);
-    setStatus(`데이터 로드 완료 · 로우데이터 ${STATE.raw.length}행 · 슬랙 ${slackCount}건`, 'ok');
+    applyData(data);
+    saveCache(data);
 
-    document.getElementById('src-data')?.classList.add('on');
-    if (slackCount > 0) document.getElementById('src-slack')?.classList.add('on');
-    document.getElementById('last-sync').textContent = 'Sheet · ' + new Date().toTimeString().slice(0,5);
-    document.getElementById('onboard-wrap')?.classList.add('hidden');
-    document.getElementById('content-wrap')?.classList.remove('hidden');
-    renderAll();
+    const rows = (data.rawdata || []).length;
+    const slkCount = ((data.slack && data.slack.campaign) || []).length +
+                     ((data.slack && data.slack.schedule) || []).length +
+                     ((data.slack && data.slack.build) || []).length;
+    setStatus(`✅ 완료 · 로우데이터 ${rows}행 · 슬랙 ${slkCount}건` + (since ? ' (증분 업데이트)' : ''), 'ok');
   } catch (e) {
     setStatus('불러오기 실패: ' + e.message, 'err');
+    // 네트워크 실패 시 캐시라도 보여주기
+    if (cached && cached.data && STATE.raw.length === 0) {
+      applyData(cached.data);
+      setStatus('📦 캐시 데이터 사용 (오프라인 모드)', 'warn');
+    }
   }
+}
+
+// "전체 새로고침" 버튼용
+async function forceRefreshSheet() {
+  clearCache();
+  await syncFromSheet(true);
 }
 
 async function triggerSingularSync() {
@@ -3018,7 +3228,7 @@ async function triggerSingularSync() {
   if (!url) { setStatus('URL을 먼저 입력하세요', 'err'); return; }
   setStatus('싱귤러 API 동기화 시작... (최대 5분 · 대용량이면 길어짐)', 'info');
   try {
-    const res = await fetch(url + '?action=syncSingular');
+    const res = await authFetch(url, '?action=syncSingular');
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     setStatus(`싱귤러 동기화 완료 · ${data.rows || 0}행 처리 · ${data.elapsed || '?'}초`, 'ok');
@@ -3034,7 +3244,7 @@ async function triggerSlackSync() {
   if (!url) { setStatus('URL을 먼저 입력하세요', 'err'); return; }
   setStatus('슬랙 채널 메시지 동기화 중... (최대 30초)', 'info');
   try {
-    const res = await fetch(url + '?action=syncSlack');
+    const res = await authFetch(url, '?action=syncSlack');
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     const logStr = (data.log || []).join(' · ');
@@ -3733,7 +3943,7 @@ function renderCountry() {
 
   // 순서 고정: KR JP US 기타
   const order = { 'KR': 0, 'JP': 1, 'US': 2, '기타': 3 };
-  arr.sort((a,b) => (order[a.country] ?? 99) - (order[b.country] ?? 99));
+  arr.sort((a,b) => (order[a.country] || 99) - (order[b.country] || 99));
 
   const C = getChartColors();
   const countryColors = [C.accent, C.good, C.warn, C.textDim];
@@ -4086,7 +4296,7 @@ function renderCalendar() {
 
   // 날짜별 슬랙 캠페인 이벤트 (전체)
   const eventsByDate = new Map();
-  (STATE.slack?.campaign || []).forEach(e => {
+  (STATE.slack && slack.campaign || []).forEach(e => {
     if (!e.timestamp) return;
     const k = e.timestamp.slice(0, 10);
     if (!eventsByDate.has(k)) eventsByDate.set(k, []);
@@ -4128,7 +4338,7 @@ function renderCalendar() {
 
     // 액션 우선순위 정렬 (신규라이브 먼저, 종료 나중)
     const actionOrder = { '신규라이브': 0, '캡조정': 1, '골조정': 2, '소재변경': 3, '종료': 4 };
-    dayEvents.sort((a, b) => (actionOrder[a.action] ?? 99) - (actionOrder[b.action] ?? 99));
+    dayEvents.sort((a, b) => (actionOrder[a.action] || 99) - (actionOrder[b.action] || 99));
 
     // ROI 태그 (비용 있는 날만)
     let roiTag = '';
@@ -4187,9 +4397,9 @@ function renderCalDetail() {
   let html = '';
 
   // 1. 그날의 캠페인 이벤트
-  const events = (STATE.slack?.campaign || []).filter(e => e.timestamp && e.timestamp.slice(0, 10) === d);
+  const events = (STATE.slack && slack.campaign || []).filter(e => e.timestamp && e.timestamp.slice(0, 10) === d);
   const actionOrder = { '신규라이브': 0, '캡조정': 1, '골조정': 2, '소재변경': 3, '종료': 4 };
-  events.sort((a, b) => (actionOrder[a.action] ?? 99) - (actionOrder[b.action] ?? 99));
+  events.sort((a, b) => (actionOrder[a.action] || 99) - (actionOrder[b.action] || 99));
 
   if (events.length) {
     html += '<h4 style="font-size: 13px; color: var(--text); font-weight: 600; margin: 0 0 12px;">📢 캠페인 이벤트 · ' + events.length + '건</h4>';
@@ -4627,7 +4837,7 @@ function parseEventDate(v) {
 function applyEventPeriodFilter() {
   const rows = EVENT_STATE.rows;
   const period = EVENT_STATE.period || 'all';
-  const dateKey = EVENT_STATE.keys?.dateKey;
+  const dateKey = EVENT_STATE.keys && keys.dateKey;
 
   // 기간별로 필터링 (전체면 모두)
   let filtered = rows;
@@ -5114,7 +5324,7 @@ function renderEventDetail() {
  * 반환: { partnerKey: { attrDays, payouts: { 허들: 단가USD }, source } }
  */
 function parseCampaignPayouts() {
-  const campaigns = (STATE.slack?.campaign) || [];
+  const campaigns = (STATE.slack && slack.campaign) || [];
   if (!campaigns.length) return {};
 
   // 최신부터 (같은 파트너 나중 값이 덮어쓸 수 있게)
@@ -5228,11 +5438,11 @@ function autoApplyCampaignConfig() {
 
   const appliedPartners = [];
   Object.entries(parsed).forEach(([partner, info]) => {
-    if (info.attrDays && !EVENT_STATE.attrManual?.[partner]) {
+    if (info.attrDays && !EVENT_STATE.attrManual && attrManual[partner]) {
       EVENT_STATE.attrConfig[partner] = info.attrDays;
     }
     Object.entries(info.payouts).forEach(([hurdle, price]) => {
-      if (!EVENT_STATE.payoutManual?.[hurdle]) {
+      if (!EVENT_STATE.payoutManual && payoutManual[hurdle]) {
         EVENT_STATE.payoutConfig[hurdle] = price;
       }
     });
@@ -5288,10 +5498,10 @@ function renderEventConfigTab() {
   tbody.innerHTML = partners.map(p => {
     const s = stats[p];
     const autoRev = findSingularRev(p);
-    const savedRev = EVENT_STATE.d1revConfig?.[p] ?? autoRev;
-    const attrDays = EVENT_STATE.attrConfig?.[p] ?? s.attrDays ?? (p.toLowerCase() === 'skyflag' ? 14 : 7);
+    const savedRev = EVENT_STATE.d1revConfig && d1revConfig[p] || autoRev;
+    const attrDays = EVENT_STATE.attrConfig && attrConfig[p] || s.attrDays || (p.toLowerCase() === 'skyflag' ? 14 : 7);
     const fromSlack = campSrc[p];
-    const slackBadge = fromSlack?.attrDays ? '<span style="background: var(--accent-soft); color: var(--accent); padding: 1px 6px; border-radius: 3px; font-size: 10px; margin-left: 4px;">🤖 슬랙</span>' : '';
+    const slackBadge = fromSlack && fromSlack.attrDays ? '<span style="background: var(--accent-soft); color: var(--accent); padding: 1px 6px; border-radius: 3px; font-size: 10px; margin-left: 4px;">🤖 슬랙</span>' : '';
     const d1src = autoRev > 0 ? '싱귤러: $' + autoRev.toFixed(4) : '수동입력';
     return `<tr>
       <td class="bold">${p}</td>
@@ -5306,7 +5516,7 @@ function renderEventConfigTab() {
   const hbody = document.querySelector('#tbl-hurdle-payout tbody');
   hbody.innerHTML = hurdles.map(h => {
     const totalReach = partners.reduce((a, p) => a + (stats[p].hurdles[h] || 0), 0);
-    const defaultPayout = (EVENT_STATE.payoutConfig?.[h] ?? (h * 0.0007)).toFixed(4);
+    const defaultPayout = (EVENT_STATE.payoutConfig && payoutConfig[h] || (h * 0.0007)).toFixed(4);
     const cost = totalReach * parseFloat(defaultPayout);
 
     // 이 허들이 슬랙 캠페인에서 감지됐는지 표시
@@ -5334,10 +5544,10 @@ function getCurrency() {
 function fmtCur(usd, decimals) {
   const cur = getCurrency();
   const val = usd * (FX[cur] || 1);
-  if (cur === 'USD') return '$' + val.toFixed(decimals ?? 4);
+  if (cur === 'USD') return '$' + val.toFixed(decimals || 4);
   if (cur === 'KRW') return '₩' + Math.round(val).toLocaleString();
   if (cur === 'JPY') return '¥' + Math.round(val).toLocaleString();
-  return val.toFixed(decimals ?? 2);
+  return val.toFixed(decimals || 2);
 }
 
 function curSymbol() {
@@ -5356,7 +5566,7 @@ function changeCurrency() {
 
 // 슬랙에서 캠페인 설정 다시 불러오기
 function refreshCampaignConfig() {
-  if (!(STATE.slack?.campaign || []).length) {
+  if (!(STATE.slack && slack.campaign || []).length) {
     showErrorToast('슬랙 캠페인 로그가 없습니다. 먼저 구글시트에서 불러오세요.');
     return;
   }
@@ -5388,7 +5598,7 @@ function applyEventConfig() {
     const v = +el.value || 7;
     attrConfig[p] = v;
     // 슬랙 자동 값과 다르면 수동 조정으로 플래그
-    const slackDays = EVENT_STATE.campaignSource?.[p]?.attrDays;
+    const slackDays = EVENT_STATE.campaignSource && campaignSource[p]?.attrDays;
     if (slackDays && slackDays !== v) attrManual[p] = true;
   });
   const d1revConfig = {};
@@ -5403,7 +5613,7 @@ function applyEventConfig() {
     payoutConfig[h] = v;
     // 슬랙 자동 값과 다르면 수동 플래그
     const slackPrice = Object.values(EVENT_STATE.campaignSource || {})
-      .map(p => p.payouts?.[h]).find(x => x);
+      .map(p => p.payouts && payouts[h]).find(x => x);
     if (slackPrice && Math.abs(slackPrice - v) > 0.0001) payoutManual[h] = true;
   });
   EVENT_STATE.attrConfig = attrConfig;
@@ -5445,8 +5655,8 @@ function renderEventProfitTab() {
 
   const d1revConfig = EVENT_STATE.d1revConfig || {};
   const payoutConfig = EVENT_STATE.payoutConfig || {};
-  const getPayout = h => payoutConfig[h] ?? (h * 0.0007);
-  const getD1rev = p => d1revConfig[p] ?? 0;
+  const getPayout = h => payoutConfig[h] || (h * 0.0007);
+  const getD1rev = p => d1revConfig[p] || 0;
 
   // 파트너 × 허들별 손익
   const rows = [];
@@ -5517,8 +5727,8 @@ function showProfitDetail(partner, hurdle) {
   if (!s) return;
   const reach = s.hurdles[hurdle] || 0;
   const excluded = s.hurdlesExcluded[hurdle] || 0;
-  const d1rev = (EVENT_STATE.d1revConfig || {})[partner] ?? 0;
-  const payout = (EVENT_STATE.payoutConfig || {})[hurdle] ?? (hurdle * 0.0007);
+  const d1rev = (EVENT_STATE.d1revConfig || {})[partner] || 0;
+  const payout = (EVENT_STATE.payoutConfig || {})[hurdle] || (hurdle * 0.0007);
   const cost = reach * payout;
   const rev = reach * d1rev;
   const profit = rev - cost;
@@ -5538,7 +5748,7 @@ function showProfitDetail(partner, hurdle) {
 
   // 어트리뷰션 필터 제외율
   const exclRate = (reach + excluded) > 0 ? excluded / (reach + excluded) : 0;
-  const attrDays = (EVENT_STATE.attrConfig || {})[partner] ?? (partner.toLowerCase() === 'skyflag' ? 14 : 7);
+  const attrDays = (EVENT_STATE.attrConfig || {})[partner] || (partner.toLowerCase() === 'skyflag' ? 14 : 7);
   const fraudNote = exclRate > 0.2
     ? '⚠️ 어트리뷰션 초과율 ' + PCT(exclRate, 0) + ' (매우 높음) → 프라우드 의심'
     : exclRate > 0.05
@@ -5634,7 +5844,7 @@ function recalcAdjustment() {
   if (!partner || !stats[partner]) return;
 
   const s = stats[partner];
-  const d1rev = (EVENT_STATE.d1revConfig || {})[partner] ?? 0;
+  const d1rev = (EVENT_STATE.d1revConfig || {})[partner] || 0;
   const payoutConfig = EVENT_STATE.payoutConfig || {};
 
   document.getElementById('adj-partner-label').textContent = '· ' + partner + (d1rev > 0 ? ' · D1 rev $' + d1rev.toFixed(4) : '');
@@ -5645,7 +5855,7 @@ function recalcAdjustment() {
     const reach = s.hurdles[h] || 0;
     if (reach === 0) return '';
     const rate = s.total > 0 ? reach / s.total : 0;
-    const prev = payoutConfig[h] ?? (h * 0.0007);
+    const prev = payoutConfig[h] || (h * 0.0007);
     const currentRoas = prev > 0 ? d1rev / prev : 0;
     // 조정된 단가: d1rev / targetRoas (목표 ROAS에 맞추기)
     const adjusted = d1rev > 0 ? d1rev / targetRoas : prev;
@@ -5709,7 +5919,7 @@ function renderTimingTab() {
   const sort = document.getElementById('tim-sort')?.value || 'asc';
 
   const attrConfig = EVENT_STATE.attrConfig || {};
-  const getAttrDays = p => attrConfig[p] ?? (String(p).toLowerCase() === 'skyflag' ? 14 : 7);
+  const getAttrDays = p => attrConfig[p] || (String(p).toLowerCase() === 'skyflag' ? 14 : 7);
 
   const filtered = rows.map(r => {
     const p = String(r[k.partnerKey] || '');
@@ -5787,6 +5997,19 @@ function exportTimingCsv() {
 
 // 초기 탭 세팅
 renderTabs();
+
+// 🚀 페이지 로드 시 캐시에서 자동 복원
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    try {
+      if (typeof tryLoadFromCache === 'function') {
+        tryLoadFromCache();
+      }
+    } catch(e) {
+      console.warn('캐시 자동 로드 실패:', e);
+    }
+  }, 300);
+});
 
 // 네트워크/국가 정렬 드롭다운 이벤트
 document.getElementById('sort-network')?.addEventListener('change', () => {
