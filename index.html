@@ -330,6 +330,10 @@
   .subview { display: none; }
   .subview.active { display: block; }
 
+  /* 이벤트 탭 서브뷰: hidden 클래스만으로 토글 */
+  #view-eventanalysis .subview { display: block; }
+  #view-eventanalysis .subview.hidden { display: none; }
+
   /* 비교 모드 KPI */
   .kpi-delta {
     font-size: 10px;
@@ -3410,7 +3414,15 @@ function renderViewById(id) {
     else if (id === 'view-calendar') { renderCalendar(); }
     else if (id === 'view-titles') renderTitles();
     else if (id === 'view-livecampaign') renderLiveCampaign();
-    // eventanalysis는 CSV 업로드 시에만 렌더됨
+    else if (id === 'view-eventanalysis') {
+      // 분석 결과 있으면 렌더, 없으면 업로드 뷰 표시
+      if (EVENT_STATE2 && EVENT_STATE2.results && EVENT_STATE2.results.length) {
+        renderEventResults();
+      } else {
+        // 캘린더 데이터는 바로 갱신
+        try { refreshEventCalendar(); } catch(e) {}
+      }
+    }
     RENDER_CACHE[id] = true;
   } catch(e) {
     console.error('renderViewById:', id, e);
