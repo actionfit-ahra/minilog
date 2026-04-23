@@ -2176,16 +2176,37 @@
       <div class="panel-title">📥 싱귤러 CSV 업로드 (Revenue / Retention)</div>
     </div>
     <div style="padding: 18px;">
-      <p style="font-size: 13px; color: var(--text); margin-bottom: 12px; line-height: 1.7;">
-        싱귤러 Advertiser Daily Report CSV를 업로드하면 <strong>해당 기간의 Revenue / Retention</strong>이 로우데이터에 반영됩니다.<br>
-        업로드된 기간은 <strong>완전히 덮어씀</strong> (최신 cohort가 반영됨). Cost가 N/A인 경우 기존 Cost가 자동 복구됩니다.
+      <p style="font-size: 13px; color: var(--text); margin-bottom: 14px; line-height: 1.7;">
+        싱귤러 Advertiser Daily Report CSV를 드롭하거나 클릭해서 선택하세요.<br>
+        <span style="color: var(--text-dim); font-size: 12px;">업로드된 기간은 <strong>완전히 덮어씀</strong> · Cost가 N/A면 기존 값 자동 복구 · Unattributed/Untrusted 자동 제외</span>
       </p>
-      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
-        <input type="file" id="sing-csv-input" accept=".csv" style="font-size: 12px;">
-        <button class="btn primary" data-action="uploadSingularCSV">업로드</button>
-        <button class="btn" data-action="previewSingularCSV">미리보기만</button>
+
+      <div id="sing-drop-zone" style="
+        border: 2px dashed var(--border);
+        border-radius: 10px;
+        padding: 40px 20px;
+        text-align: center;
+        background: var(--bg-elev);
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+      ">
+        <div style="font-size: 40px; margin-bottom: 10px; opacity: 0.6;">📄</div>
+        <div id="sing-drop-text" style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 6px;">
+          여기에 CSV 파일을 드롭하세요
+        </div>
+        <div style="font-size: 12px; color: var(--text-dim);">
+          또는 클릭해서 파일 선택
+        </div>
+        <input type="file" id="sing-csv-input" accept=".csv" style="position:absolute; inset:0; opacity:0; cursor:pointer;">
       </div>
-      <div id="sing-csv-status" style="margin-top: 10px; padding: 10px; background: var(--bg-elev); border-radius: 4px; font-size: 12px; color: var(--text-dim); min-height: 20px; font-family: var(--font-mono); line-height: 1.7;">CSV 파일을 선택하세요. Source / App / OS / Date / Installs / Revenue D1~D7 / Retention 등이 자동 파싱됩니다.</div>
+
+      <div id="sing-csv-status" style="margin-top: 12px; padding: 12px 14px; background: var(--bg-elev); border-radius: 6px; font-size: 12px; color: var(--text-dim); min-height: 20px; line-height: 1.7; display: none;"></div>
+
+      <div id="sing-action-row" style="margin-top: 14px; display: none; gap: 8px; justify-content: flex-end;">
+        <button class="btn" data-action="cancelSingularCSV">취소</button>
+        <button class="btn primary" data-action="uploadSingularCSV">업로드 실행</button>
+      </div>
     </div>
   </div>
 
@@ -3014,15 +3035,21 @@ function parseSingularCSVText(text) {
   return { headers, rows };
 }
 
-async function previewSingularCSV() {
+async function previewSingularCSV(fileOverride) {
   const input = document.getElementById('sing-csv-input');
   const statusEl = document.getElementById('sing-csv-status');
-  if (!input || !input.files || !input.files[0]) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">CSV 파일을 먼저 선택하세요</span>';
+  const actionRow = document.getElementById('sing-action-row');
+  const dropText = document.getElementById('sing-drop-text');
+
+  const file = fileOverride || (input && input.files && input.files[0]);
+  if (!file) {
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = '<span style="color:var(--bad);">CSV 파일을 먼저 선택하세요</span>';
+    }
     return;
   }
-  const file = input.files[0];
-  if (statusEl) statusEl.textContent = '읽는 중...';
+  if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '읽는 중...'; }
   try {
     const text = await file.text();
     const { headers, rows } = parseSingularCSVText(text);
@@ -3030,7 +3057,6 @@ async function previewSingularCSV() {
       statusEl.innerHTML = '<span style="color:var(--bad);">파싱된 행 없음</span>';
       return;
     }
-    // 기간, 앱, 소스 요약
     const dates = rows.map(r => (r.Date || '').slice(0, 10)).filter(Boolean).sort();
     const minDate = dates[0];
     const maxDate = dates[dates.length - 1];
@@ -3039,38 +3065,53 @@ async function previewSingularCSV() {
     const excludeCount = rows.filter(r => ['Unattributed Ad Revenue', 'Untrusted'].includes(String(r.Source || '').trim())).length;
     const revCount = rows.filter(r => r['Net Total Revenue 1d'] && r['Net Total Revenue 1d'] !== 'N/A' && +r['Net Total Revenue 1d'] > 0).length;
 
+    // 드롭존 텍스트 갱신
+    if (dropText) dropText.textContent = '✓ ' + file.name;
+
     statusEl.innerHTML =
-      '<div style="color:var(--text); line-height:1.8;">' +
-      '<strong>파일</strong>: ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)<br>' +
-      '<strong>총 행</strong>: ' + rows.length + '행<br>' +
-      '<strong>기간</strong>: ' + minDate + ' ~ ' + maxDate + '<br>' +
-      '<strong>앱</strong>: ' + apps.length + '개 (' + apps.slice(0, 5).join(', ') + (apps.length > 5 ? ' 외' : '') + ')<br>' +
-      '<strong>소스</strong>: ' + sources.length + '개 (' + sources.slice(0, 6).join(', ') + (sources.length > 6 ? ' 외' : '') + ')<br>' +
-      '<strong>Revenue 있음</strong>: ' + revCount + '행<br>' +
-      (excludeCount > 0 ? '<span style="color:var(--warn);">⚠ Unattributed/Untrusted 제외 예정: ' + excludeCount + '행</span><br>' : '') +
-      '<strong>컬럼</strong>: ' + headers.length + '개 (' + headers.slice(0, 8).join(', ') + (headers.length > 8 ? ' ...' : '') + ')' +
+      '<div style="color:var(--text); line-height:1.9;">' +
+      '<strong>📄 ' + file.name + '</strong> <span style="color:var(--text-dim);">(' + (file.size/1024).toFixed(1) + ' KB)</span><br>' +
+      '<strong>총 행</strong>: ' + rows.length + '행 · <strong>기간</strong>: ' + minDate + ' ~ ' + maxDate + '<br>' +
+      '<strong>앱</strong>: ' + apps.length + '개 · <strong>소스</strong>: ' + sources.length + '개<br>' +
+      '<strong>Revenue 있음</strong>: ' + revCount + '행' +
+      (excludeCount > 0 ? ' · <span style="color:var(--warn);">제외 예정: ' + excludeCount + '행</span>' : '') +
       '</div>';
+
+    // 업로드 버튼 표시
+    if (actionRow) actionRow.style.display = 'flex';
   } catch (e) {
     statusEl.innerHTML = '<span style="color:var(--bad);">오류: ' + e.message + '</span>';
   }
 }
 
+function cancelSingularCSV() {
+  const input = document.getElementById('sing-csv-input');
+  const statusEl = document.getElementById('sing-csv-status');
+  const actionRow = document.getElementById('sing-action-row');
+  const dropText = document.getElementById('sing-drop-text');
+  if (input) input.value = '';
+  if (statusEl) { statusEl.style.display = 'none'; statusEl.innerHTML = ''; }
+  if (actionRow) actionRow.style.display = 'none';
+  if (dropText) dropText.textContent = '여기에 CSV 파일을 드롭하세요';
+  window._singularDroppedFile = null;
+}
+
 async function uploadSingularCSV() {
   const input = document.getElementById('sing-csv-input');
   const statusEl = document.getElementById('sing-csv-status');
-  if (!input || !input.files || !input.files[0]) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">CSV 파일을 먼저 선택하세요</span>';
+  const file = window._singularDroppedFile || (input && input.files && input.files[0]);
+  if (!file) {
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = '<span style="color:var(--bad);">CSV 파일을 먼저 선택하세요</span>'; }
     return;
   }
-  const file = input.files[0];
   const url = document.getElementById('cfg-sheet-url')?.value?.trim();
   if (!url) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">Apps Script URL 없음</span>';
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = '<span style="color:var(--bad);">Apps Script URL 없음</span>'; }
     return;
   }
   const pw = sessionStorage.getItem('minilog-pw') || '';
 
-  if (statusEl) statusEl.textContent = '읽고 파싱 중...';
+  if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '읽고 파싱 중...'; }
   let rows;
   try {
     const text = await file.text();
@@ -3086,7 +3127,6 @@ async function uploadSingularCSV() {
     return;
   }
 
-  // 기간 정보
   const dates = rows.map(r => (r.Date || '').slice(0, 10)).filter(Boolean);
   const minDate = dates.reduce((a, b) => a < b ? a : b, '9999');
   const maxDate = dates.reduce((a, b) => a > b ? a : b, '0000');
@@ -3096,7 +3136,7 @@ async function uploadSingularCSV() {
     return;
   }
 
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-dim);">전송 중... (' + rows.length + '행, 몇 초 소요)</span>';
+  statusEl.innerHTML = '<span style="color:var(--text-dim);">전송 중... (' + rows.length + '행, 몇 초 소요)</span>';
 
   try {
     const body = new URLSearchParams();
@@ -3104,10 +3144,7 @@ async function uploadSingularCSV() {
     body.append('pw', pw);
     body.append('rows', JSON.stringify(rows));
 
-    const resp = await fetch(url, {
-      method: 'POST',
-      body: body
-    });
+    const resp = await fetch(url, { method: 'POST', body: body });
     const result = await resp.json();
 
     if (result.ok) {
@@ -3115,19 +3152,16 @@ async function uploadSingularCSV() {
         '<div style="color:var(--good); line-height:1.8;">' +
         '<strong>✓ 업로드 완료</strong><br>' +
         '기간: ' + result.dateRange + '<br>' +
-        '새로 저장: ' + result.uploaded + '행<br>' +
-        '제거된 기존 행: ' + result.removed + '행<br>' +
-        '유지된 행: ' + result.kept + '행<br>' +
-        '전체: ' + result.total + '행' +
-        (result.excluded ? '<br>제외 (Unattributed/Untrusted): ' + result.excluded + '행' : '') +
+        '새로 저장: ' + result.uploaded + '행 · 유지: ' + result.kept + '행 · 전체: ' + result.total + '행' +
+        (result.excluded ? '<br>제외: ' + result.excluded + '행' : '') +
         (result.notWhitelisted ? '<br>화이트리스트 아님: ' + result.notWhitelisted + '행' : '') +
         '</div>';
 
-      // 캐시 갱신 후 재로드
       setTimeout(() => {
         if (typeof clearCache === 'function') clearCache();
         if (typeof syncFromSheet === 'function') syncFromSheet(true);
-      }, 1500);
+        cancelSingularCSV();
+      }, 2000);
     } else {
       statusEl.innerHTML = '<span style="color:var(--bad);">실패: ' + (result.error || 'unknown') + '</span>';
     }
@@ -3135,6 +3169,66 @@ async function uploadSingularCSV() {
     statusEl.innerHTML = '<span style="color:var(--bad);">네트워크 오류: ' + e.message + '</span>';
   }
 }
+
+// 드래그앤드롭 + 파일선택 이벤트 바인딩
+function bindSingularDropZone() {
+  const zone = document.getElementById('sing-drop-zone');
+  const input = document.getElementById('sing-csv-input');
+  if (!zone || zone._bound) return;
+  zone._bound = true;
+
+  // 파일 선택 시 자동 미리보기
+  if (input) {
+    input.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) {
+        window._singularDroppedFile = f;
+        previewSingularCSV(f);
+      }
+    });
+  }
+
+  // 드래그앤드롭
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    zone.style.borderColor = 'var(--accent)';
+    zone.style.background = 'var(--accent-soft, rgba(59, 130, 246, 0.1))';
+  });
+  zone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    zone.style.borderColor = '';
+    zone.style.background = 'var(--bg-elev)';
+  });
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    zone.style.borderColor = '';
+    zone.style.background = 'var(--bg-elev)';
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      const f = files[0];
+      if (!f.name.toLowerCase().endsWith('.csv')) {
+        alert('CSV 파일만 업로드 가능합니다');
+        return;
+      }
+      window._singularDroppedFile = f;
+      // input에도 반영 (일부 환경 호환)
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        input.files = dt.files;
+      } catch (err) {}
+      previewSingularCSV(f);
+    }
+  });
+}
+
+// 페이지 로드 시 + 탭 진입 시 바인딩
+document.addEventListener('DOMContentLoaded', bindSingularDropZone);
+setTimeout(bindSingularDropZone, 500);
+setTimeout(bindSingularDropZone, 2000);
 
 
 // 캐시에서 먼저 로드 시도 (페이지 시작 시)
