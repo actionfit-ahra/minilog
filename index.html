@@ -159,19 +159,20 @@
     background: var(--bg-card);
     color: var(--text);
     border: 1px solid var(--border);
-    padding: 7px 12px;
+    padding: 10px 18px;
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
-    border-radius: 4px;
+    border-radius: 6px;
     line-height: 1.4;
+    white-space: nowrap;
   }
   .btn:hover { border-color: var(--border-strong); background: var(--bg-hover); }
   .btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
   .btn.primary:hover { opacity: 0.9; }
-  .btn.sm { padding: 5px 8px; font-size: 11px; }
+  .btn.sm { padding: 7px 12px; font-size: 12px; }
 
   .theme-toggle {
     width: 34px; height: 34px;
@@ -200,10 +201,10 @@
   nav.tabs::-webkit-scrollbar { display: none; }
 
   .tab {
-    padding: 10px 14px;
+    padding: 14px 20px;
     white-space: nowrap;
     font-family: var(--font-body);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--text-dim);
     cursor: pointer;
@@ -248,13 +249,13 @@
     background: var(--bg-card);
     border: 1px solid var(--border);
     color: var(--text);
-    padding: 6px 10px;
+    padding: 8px 12px;
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
-    min-width: 110px;
+    min-width: 120px;
     transition: all 0.12s;
   }
   .gf-select:hover { border-color: var(--border-strong); background: var(--bg-hover); }
@@ -293,14 +294,14 @@
   .subtabs {
     display: flex;
     gap: 4px;
-    margin-bottom: 16px;
+    margin-bottom: 24px;
     border-bottom: 1px solid var(--border);
     overflow-x: auto;
     scrollbar-width: none;
   }
   .subtabs::-webkit-scrollbar { display: none; }
   .subtab {
-    padding: 8px 14px;
+    padding: 12px 18px;
     border: none;
     background: none;
     font-family: var(--font-body);
@@ -353,40 +354,40 @@
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.2;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
   }
   h1.section-title .accent { color: var(--accent); }
 
   .section-desc {
     color: var(--text-dim);
     font-size: 13px;
-    margin-bottom: 20px;
+    margin-bottom: 28px;
   }
 
   .kpi-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 10px;
-    margin-bottom: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
   }
 
   .kpi-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 14px 16px;
+    border-radius: 8px;
+    padding: 20px 22px;
     box-shadow: var(--shadow);
   }
 
   .kpi-label {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-dim);
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     font-weight: 500;
   }
 
   .kpi-value {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
     letter-spacing: -0.01em;
     line-height: 1.1;
@@ -399,9 +400,9 @@
 
   .kpi-sub {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-faint);
-    margin-top: 4px;
+    margin-top: 6px;
   }
   .kpi-sub.good { color: var(--good); }
   .kpi-sub.bad { color: var(--bad); }
@@ -1320,11 +1321,12 @@
     </div>
   </div>
   <nav class="tabs">
-    <button class="tab active" data-view="home">🏠 홈</button>
-    <button class="tab" data-view="analysis">📊 분석</button>
-    <button class="tab" data-view="insights">💡 개선 제안</button>
-    <button class="tab" data-view="event">🎯 이벤트</button>
-    <button class="tab" data-view="settings">⚙️ 설정</button>
+    <button class="tab active" data-view="home">홈</button>
+    <button class="tab" data-view="campaign">캠페인</button>
+    <button class="tab" data-view="analysis">분석</button>
+    <button class="tab" data-view="insights">개선 제안</button>
+    <button class="tab" data-view="event">이벤트</button>
+    <button class="tab" data-view="settings">설정</button>
   </nav>
   <!-- 전역 필터 (sticky) -->
   <div class="global-filter" id="global-filter-bar">
@@ -1355,6 +1357,10 @@
     </select>
     <label class="gf-label">네트워크</label>
     <select id="gf-network" class="gf-select">
+      <option value="">전체</option>
+    </select>
+    <label class="gf-label">타이틀</label>
+    <select id="gf-title" class="gf-select">
       <option value="">전체</option>
     </select>
     <div style="flex: 1"></div>
@@ -1941,29 +1947,29 @@
   <div class="title-grid" id="title-grid"></div>
 </section>
 
-<!-- ========== 🚦 진행 중 캠페인 ========== -->
+<!-- ========== 진행 중 캠페인 ========== -->
 <section class="view" id="view-livecampaign">
   <h1 class="section-title">진행 중 <span class="accent">캠페인</span></h1>
   <div class="section-desc">슬랙 #캠페인 채널 기반 · 각 타이틀별로 현재 라이브 중인 캠페인을 확인할 수 있습니다.</div>
 
   <div style="display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;">
     <div class="kpi-card">
-      <div class="kpi-label">📦 활성 타이틀</div>
+      <div class="kpi-label">활성 타이틀</div>
       <div class="kpi-value" id="lc-active-titles">—</div>
       <div class="kpi-sub" id="lc-active-titles-sub">—</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">🚦 진행 중 캠페인</div>
+      <div class="kpi-label">진행 중 캠페인</div>
       <div class="kpi-value" id="lc-active-campaigns">—</div>
       <div class="kpi-sub" id="lc-active-campaigns-sub">—</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">⏸ 대기/홀딩</div>
+      <div class="kpi-label">대기/홀딩</div>
       <div class="kpi-value" id="lc-holding">—</div>
       <div class="kpi-sub" id="lc-holding-sub">—</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">🔕 캠페인 없음</div>
+      <div class="kpi-label">캠페인 없음</div>
       <div class="kpi-value" id="lc-silent">—</div>
       <div class="kpi-sub" id="lc-silent-sub">화이트리스트 중 미활성</div>
     </div>
@@ -2066,13 +2072,13 @@
 
     <!-- 서브탭 -->
     <div class="subtabs" id="event-subtabs">
-      <button class="subtab" data-esub="config">⚙️ 설정</button>
-      <button class="subtab active" data-esub="profit">💰 손익 분석</button>
-      <button class="subtab" data-esub="adjust">🔧 단가 조정안</button>
-      <button class="subtab" data-esub="timing">🕐 달성 시간</button>
-      <button class="subtab" data-esub="partner">🏢 파트너별</button>
-      <button class="subtab" data-esub="hurdle">🎚 허들별</button>
-      <button class="subtab" data-esub="detail">📋 상세</button>
+      <button class="subtab" data-esub="config">설정</button>
+      <button class="subtab active" data-esub="profit">손익 분석</button>
+      <button class="subtab" data-esub="adjust">단가 조정안</button>
+      <button class="subtab" data-esub="timing">달성 시간</button>
+      <button class="subtab" data-esub="partner">파트너별</button>
+      <button class="subtab" data-esub="hurdle">허들별</button>
+      <button class="subtab" data-esub="detail">상세</button>
     </div>
 
     <!-- ⚙️ 설정 -->
@@ -2084,7 +2090,7 @@
             <strong style="color: var(--accent);">🤖 슬랙 캠페인 자동 연동</strong>
             <span style="font-size: 11px; color: var(--text-dim);" id="camp-auto-status">—</span>
             <span style="flex: 1;"></span>
-            <button class="btn sm primary" data-action="refreshCampaignConfig">🔄 슬랙에서 다시 불러오기</button>
+            <button class="btn sm primary" data-action="refreshCampaignConfig">슬랙에서 다시 불러오기</button>
           </div>
           <div style="font-size: 11px; color: var(--text-dim); margin-top: 6px; line-height: 1.6;">
             캠페인 로그의 <code>Reach 6000 Points $0.50 14Day</code> · <code>첫 4000점 달성 ₩500</code> 같은 패턴을 자동 인식하여 단가/어트리뷰션에 반영합니다. 수동 수정 값은 덮어쓰지 않습니다.
@@ -2115,7 +2121,7 @@
             </table>
           </div>
           <div style="margin-top: 14px; display: flex; gap: 8px;">
-            <button class="btn primary" data-action="applyEventConfig">💾 설정 적용 + 재계산</button>
+            <button class="btn primary" data-action="applyEventConfig">설정 적용 + 재계산</button>
             <button class="btn" data-action="resetEventConfig">기본값으로</button>
           </div>
         </div>
@@ -2457,15 +2463,15 @@
       <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 6px; font-weight: 500;">Apps Script 웹앱 URL</label>
       <input type="text" id="cfg-sheet-url" value="https://script.google.com/a/macros/actionfit.kr/s/AKfycbymm1WDUadsf2Bl02ITEVKYmovfD5ya2Eh3fesw3XYDWXcuNETI1obMHoR34v4Co6Q/exec" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:9px 11px; font-family:var(--font-mono); font-size:11px; border-radius: 4px;">
       <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
-        <button class="btn primary" data-action="syncFromSheet">📥 신규만 불러오기 (빠름)</button>
-        <button class="btn" data-action="loadOlderData">📚 과거 데이터 추가</button>
-        <button class="btn" data-action="forceRefreshSheet">🔄 전체 새로고침</button>
-        <button class="btn" data-action="triggerFullSync">⚡ 싱귤러+슬랙 동기화</button>
-        <button class="btn" data-action="triggerSingularSync">📊 싱귤러만</button>
-        <button class="btn" data-action="triggerSlackSync">💬 슬랙만</button>
-        <button class="btn" data-action="testConnection">🔍 연결 테스트</button>
-        <button class="btn" data-action="clearCache">🗑 캐시 삭제</button>
-        <button class="btn" data-action="showSetupGuide">📖 설정 가이드</button>
+        <button class="btn primary" data-action="syncFromSheet">신규만 불러오기</button>
+        <button class="btn" data-action="loadOlderData">과거 데이터 추가</button>
+        <button class="btn" data-action="forceRefreshSheet">전체 새로고침</button>
+        <button class="btn" data-action="triggerFullSync">싱귤러+슬랙 동기화</button>
+        <button class="btn" data-action="triggerSingularSync">싱귤러만</button>
+        <button class="btn" data-action="triggerSlackSync">슬랙만</button>
+        <button class="btn" data-action="testConnection">연결 테스트</button>
+        <button class="btn" data-action="clearCache">캐시 삭제</button>
+        <button class="btn" data-action="showSetupGuide">설정 가이드</button>
       </div>
       <div id="sheet-status" style="margin-top: 12px; padding: 10px; background: var(--bg-elev); border-radius: 4px; font-size: 12px; color: var(--text-dim); min-height: 20px; font-family: var(--font-mono); line-height: 1.7;">준비됨. 위 버튼을 클릭하세요.</div>
     </div>
@@ -2698,6 +2704,7 @@ const STATE = {
     os: '',
     country: '',
     network: '',
+    title: '',
     compare: false
   }
 };
@@ -2855,6 +2862,7 @@ function getFilteredRows(ignoreCountry = false) {
   if (STATE.filter.os) rows = rows.filter(r => r.OS === STATE.filter.os);
   if (STATE.filter.country && !ignoreCountry) rows = rows.filter(r => normalizeCountry(r.Country) === STATE.filter.country);
   if (STATE.filter.network) rows = rows.filter(r => r.Source === STATE.filter.network);
+  if (STATE.filter.title) rows = rows.filter(r => r.App === STATE.filter.title);
   return rows;
 }
 
@@ -2864,6 +2872,7 @@ function getPrevFilteredRows(ignoreCountry = false) {
   if (STATE.filter.os) rows = rows.filter(r => r.OS === STATE.filter.os);
   if (STATE.filter.country && !ignoreCountry) rows = rows.filter(r => normalizeCountry(r.Country) === STATE.filter.country);
   if (STATE.filter.network) rows = rows.filter(r => r.Source === STATE.filter.network);
+  if (STATE.filter.title) rows = rows.filter(r => r.App === STATE.filter.title);
   return rows;
 }
 
@@ -2895,16 +2904,22 @@ function aggregateBy(rows, keyFn) {
 // ===== 메인 탭 → 서브뷰 매핑 =====
 const MAIN_TABS = {
   home: {
-    label: '🏠 홈',
+    label: '홈',
     subtabs: [
       { id: 'overview',  label: '종합 현황' },
-      { id: 'bleed',     label: '🩸 손해 추적', alert: true },
-      { id: 'titles',    label: '타이틀 현황' },
-      { id: 'livecampaign', label: '🚦 진행 중 캠페인' }
+      { id: 'bleed',     label: '손해 추적', alert: true },
+      { id: 'titles',    label: '타이틀 현황' }
+    ]
+  },
+  campaign: {
+    label: '캠페인',
+    subtabs: [
+      { id: 'livecampaign', label: '진행 중 캠페인' },
+      { id: 'calendar',     label: '캠페인 캘린더' }
     ]
   },
   analysis: {
-    label: '📊 분석',
+    label: '분석',
     subtabs: [
       { id: 'performance', label: '상세 (타이틀×소스)' },
       { id: 'network',     label: '네트워크별' },
@@ -2913,23 +2928,21 @@ const MAIN_TABS = {
     ]
   },
   insights: {
-    label: '💡 개선 제안',
+    label: '개선 제안',
     subtabs: [
-      { id: 'calendar',  label: '📅 캠페인 캘린더' },
       { id: 'insights',  label: '자동 제안' }
     ]
   },
   event: {
-    label: '🎯 이벤트',
+    label: '이벤트',
     subtabs: [
       { id: 'eventanalysis', label: '달성률 분석' }
     ]
   },
   settings: {
-    label: '⚙️ 설정',
+    label: '설정',
     subtabs: [
-      { id: 'data',     label: '데이터 연결' },
-      { id: 'slack',    label: '슬랙 로그' }
+      { id: 'data',     label: '데이터 연결' }
     ]
   }
 };
@@ -3023,7 +3036,7 @@ document.querySelectorAll('.slack-tab').forEach(t => {
 
 // ===== 전역 필터 바 (드롭다운) =====
 function setupGlobalFilter() {
-  const ids = ['gf-period', 'gf-os', 'gf-country', 'gf-network'];
+  const ids = ['gf-period', 'gf-os', 'gf-country', 'gf-network', 'gf-title'];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -3033,6 +3046,7 @@ function setupGlobalFilter() {
       else if (id === 'gf-os') STATE.filter.os = v;
       else if (id === 'gf-country') STATE.filter.country = v;
       else if (id === 'gf-network') STATE.filter.network = v;
+      else if (id === 'gf-title') STATE.filter.title = v;
       // has-filter 클래스 토글 (전체 아닐 때 강조)
       if (id === 'gf-period') el.classList.toggle('has-filter', +v !== 14);
       else el.classList.toggle('has-filter', v !== '');
@@ -4057,6 +4071,13 @@ function populateFilters() {
     el.removeEventListener('change', renderPerformance);
     el.addEventListener('change', renderPerformance);
   });
+  // 전역 타이틀 필터 채우기
+  const gft = document.getElementById('gf-title');
+  if (gft) {
+    const currentVal = gft.value;
+    gft.innerHTML = '<option value="">전체</option>' + apps.map(a => `<option value="${a}">${a}</option>`).join('');
+    gft.value = currentVal;
+  }
 }
 
 function renderPerformance() {
@@ -4974,7 +4995,7 @@ function renderTitles() {
   document.getElementById('titles-sub').textContent = titleList.length + '개 타이틀 · ' + byApp.size + '개 활성';
 }
 
-// ===== 🚦 진행 중 캠페인 =====
+// ===== 진행 중 캠페인 =====
 const APP_WHITELIST = [
   'Taptap2048', 'Merge Hexa', 'Wood Block Capybara', 'Toy Block',
   'Merge Fruit juice', 'Juicy Pop', 'Fruit Blast', 'Brain Crunch',
@@ -5095,10 +5116,10 @@ function renderLiveCampaign() {
   // 카드 렌더
   gridEl.innerHTML = filtered.map(t => {
     const statusBadge = {
-      active: '<span style="background:#10b981;color:white;padding:2px 8px;border-radius:10px;font-size:10px;">🚦 진행중</span>',
-      holding: '<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:10px;font-size:10px;">⏸ 대기</span>',
-      ended: '<span style="background:#94a3b8;color:white;padding:2px 8px;border-radius:10px;font-size:10px;">🛑 종료</span>',
-      silent: '<span style="background:#e5e7eb;color:#6b7280;padding:2px 8px;border-radius:10px;font-size:10px;">🔕 조용</span>'
+      active: '<span style="background:#10b981;color:white;padding:2px 8px;border-radius:10px;font-size:10px;">진행중</span>',
+      holding: '<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:10px;font-size:10px;">대기</span>',
+      ended: '<span style="background:#94a3b8;color:white;padding:2px 8px;border-radius:10px;font-size:10px;">종료</span>',
+      silent: '<span style="background:#e5e7eb;color:#6b7280;padding:2px 8px;border-radius:10px;font-size:10px;">조용</span>'
     }[t.status];
 
     const networks = t.byNetwork.slice(0, 5).map(([net, c]) => {
@@ -5133,9 +5154,9 @@ function renderLiveCampaign() {
         ${statusBadge}
       </div>
       <div style="display:flex; gap:12px; margin-bottom:10px; font-size:11px; color:var(--text-dim);">
-        <span>🚦 ${t.activeCount}</span>
-        <span>⏸ ${t.holdingCount}</span>
-        <span>🛑 ${t.endedCount}</span>
+        <span>${t.activeCount}</span>
+        <span>${t.holdingCount}</span>
+        <span>${t.endedCount}</span>
       </div>
       ${networks || '<div style="font-size:11px; color:var(--text-faint); padding:10px 0;">최근 14일간 캠페인 없음</div>'}
       ${moreCount > 0 ? `<div style="text-align:center; font-size:10px; color:var(--text-dim); margin-top:6px;">+${moreCount}개 네트워크 더</div>` : ''}
