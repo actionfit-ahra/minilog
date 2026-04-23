@@ -2212,33 +2212,43 @@
 
   <div class="panel">
     <div class="panel-header">
-      <div class="panel-title">📁 CSV 직접 업로드 (백업)</div>
+      <div class="panel-title">📋 캠페인 세팅 업로드 (CSV / Excel)</div>
     </div>
     <div style="padding: 18px;">
-      <div class="upload-zone">
-        <label class="upload-box" id="box-rawdata">
-          <h4>① 로우데이터</h4>
-          <p>Date, Source, App, OS, Country, Installs, Cost, DAU, 리텐션/매출 D1~D7</p>
-          <div class="status">없음</div>
-          <input type="file" accept=".csv" data-src="rawdata">
-        </label>
-        <label class="upload-box" id="box-slack">
-          <h4>② 슬랙 로그</h4>
-          <p>3채널 통합 CSV<br>timestamp, author, channel, ...</p>
-          <div class="status">없음</div>
-          <input type="file" accept=".csv" data-src="slack">
-        </label>
-        <label class="upload-box" id="box-offerwall">
-          <h4>③ 오퍼월 허들</h4>
-          <p>선택 사항<br>partner, hurdle, achievers, payout</p>
-          <div class="status">없음</div>
-          <input type="file" accept=".csv" data-src="offerwall">
-        </label>
+      <p style="font-size: 13px; color: var(--text); margin-bottom: 14px; line-height: 1.7;">
+        각 타이틀×네트워크별 캠페인 세팅 (예산/캡/KPI/이벤트조건/단가 등)을 일괄 업로드합니다.<br>
+        <span style="color: var(--text-dim); font-size: 12px;">엑셀 블록 형식 지원 · 같은 타이틀+네트워크+OS+이벤트조건은 자동 덮어씀</span>
+      </p>
+
+      <div id="camp-drop-zone" style="
+        border: 2px dashed var(--border);
+        border-radius: 10px;
+        padding: 40px 20px;
+        text-align: center;
+        background: var(--bg-elev);
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+      ">
+        <div style="font-size: 40px; margin-bottom: 10px; opacity: 0.6;">📋</div>
+        <div id="camp-drop-text" style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 6px;">
+          캠페인 세팅 파일을 드롭하세요
+        </div>
+        <div style="font-size: 12px; color: var(--text-dim);">
+          CSV 또는 XLSX · 클릭해서 선택
+        </div>
+        <input type="file" id="camp-csv-input" accept=".csv,.xlsx,.xls" style="position:absolute; inset:0; opacity:0; cursor:pointer;">
       </div>
-      <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-        <button class="btn primary" data-action="loadSampleData">샘플로 체험</button>
-        <button class="btn" data-action="downloadTemplate" data-args="'rawdata'">로우데이터 양식</button>
-        <button class="btn" data-action="downloadTemplate" data-args="'slack'">슬랙 양식</button>
+
+      <div id="camp-csv-status" style="margin-top: 12px; padding: 12px 14px; background: var(--bg-elev); border-radius: 6px; font-size: 12px; color: var(--text-dim); min-height: 20px; line-height: 1.7; display: none;"></div>
+
+      <div id="camp-action-row" style="margin-top: 14px; display: none; gap: 8px; justify-content: flex-end;">
+        <button class="btn" data-action="cancelCampaignCSV">취소</button>
+        <button class="btn primary" data-action="uploadCampaignCSV">업로드 실행</button>
+      </div>
+
+      <div style="margin-top: 14px; font-size: 11px; color: var(--text-faint); line-height: 1.6;">
+        💡 <strong>양식</strong>: 각 블록 = 타이틀 × 네트워크 조합 하나 · 2열씩 나란히(A-B / D-E) 또는 세로로 연속 배치 · 이벤트조건은 블록 안에 여러 줄로 추가 · 빈 행으로 블록 구분
       </div>
     </div>
   </div>
@@ -3229,6 +3239,344 @@ function bindSingularDropZone() {
 document.addEventListener('DOMContentLoaded', bindSingularDropZone);
 setTimeout(bindSingularDropZone, 500);
 setTimeout(bindSingularDropZone, 2000);
+
+
+// ============================================================
+//  📋 캠페인 세팅 업로드 (CSV/XLSX 블록 파싱)
+// ============================================================
+
+// SheetJS 동적 로드
+let _sheetJsLoaded = false;
+let _sheetJsLoading = null;
+function loadSheetJS() {
+  if (_sheetJsLoaded) return Promise.resolve();
+  if (_sheetJsLoading) return _sheetJsLoading;
+  _sheetJsLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => { _sheetJsLoaded = true; resolve(); };
+    s.onerror = () => reject(new Error('SheetJS 로드 실패'));
+    document.head.appendChild(s);
+  });
+  return _sheetJsLoading;
+}
+
+/**
+ * 2D 배열에서 캠페인 블록들을 추출
+ * 블록 구조: 첫 셀이 비어있지 않고, 다음 행들에 "타이틀", "네트워크" 등 키가 나옴
+ * 2열씩 나란히(A-B / D-E / G-H...) 또는 세로로 연속 배치 모두 지원
+ */
+function extractCampaignBlocks(grid) {
+  if (!grid || !grid.length) return [];
+
+  const FIELD_KEYS = ['타이틀', '네트워크', 'OS', '국가', '예산', '캡', 'KPI', '캠페인명', '상태', '시작일', '이벤트조건', '단가'];
+  const blocks = [];
+
+  // 그리드 최대 폭
+  const maxCol = Math.max(...grid.map(row => row ? row.length : 0));
+
+  // 각 2열 쌍마다 스캔 (A-B=0,1 / D-E=3,4 / G-H=6,7...)
+  // 하지만 유연하게 처리: 모든 시작 컬럼을 순회하며 "키" 컬럼을 찾음
+  const usedColPairs = new Set();
+
+  for (let cKey = 0; cKey < maxCol; cKey++) {
+    if (usedColPairs.has(cKey)) continue;
+    const cVal = cKey + 1; // 값 컬럼 (키 옆)
+
+    // 블록 탐지: 이 컬럼 방향으로 스캔
+    let r = 0;
+    while (r < grid.length) {
+      const row = grid[r] || [];
+      const keyCell = String(row[cKey] || '').trim();
+
+      // "타이틀" 키를 만나면 블록 시작
+      if (keyCell === '타이틀') {
+        const block = { events: [] };
+        let rScan = r;
+
+        // 기본 필드 수집
+        while (rScan < grid.length) {
+          const curRow = grid[rScan] || [];
+          const k = String(curRow[cKey] || '').trim();
+          const v = String(curRow[cVal] || '').trim();
+
+          if (k === '이벤트조건') {
+            // 이벤트 헤더 만나면 아래부터 이벤트 목록
+            rScan++;
+            while (rScan < grid.length) {
+              const evRow = grid[rScan] || [];
+              const evName = String(evRow[cKey] || '').trim();
+              const evPrice = String(evRow[cVal] || '').trim();
+              // 이벤트 영역 종료 조건: 양쪽 다 빈칸 or 다음 필드 키 등장
+              if (!evName && !evPrice) break;
+              if (FIELD_KEYS.includes(evName) && evName !== '이벤트조건') break;
+              if (evName || evPrice) {
+                block.events.push({ '이벤트조건': evName, '단가': evPrice });
+              }
+              rScan++;
+            }
+            break; // 이벤트까지 끝나면 이 블록 끝
+          }
+
+          if (FIELD_KEYS.includes(k)) {
+            block[k] = v;
+            rScan++;
+            continue;
+          }
+
+          // 빈 행이고 아직 "타이틀" 이후라면 건너뛰지 않고 그냥 종료 판정
+          if (!k && !v && rScan > r + 1) {
+            // 연속 빈 행 2개면 블록 끝
+            const nextRow = grid[rScan + 1] || [];
+            const nextK = String(nextRow[cKey] || '').trim();
+            if (!nextK) { rScan++; break; }
+          }
+
+          rScan++;
+          // 안전장치: 너무 많이 읽으면 중단
+          if (rScan - r > 50) break;
+        }
+
+        if (block['타이틀']) {
+          blocks.push(block);
+          // 이 컬럼 쌍은 이 블록 범위만큼 스킵
+          r = rScan;
+          continue;
+        }
+      }
+      r++;
+    }
+
+    usedColPairs.add(cKey);
+    usedColPairs.add(cVal);
+    // 다음 컬럼 쌍으로 넘어감: 2칸 건너뛰기 (간격 컬럼 하나 더)
+    cKey = cVal; // for 문에서 ++되므로 cKey+1씩 이동. 실제론 쌍으로 처리됐지만 안전하게.
+  }
+
+  return blocks;
+}
+
+/**
+ * CSV 텍스트를 2D 배열로 파싱
+ */
+function parseCSVToGrid(text) {
+  text = text.replace(/^\uFEFF/, '');
+  const lines = text.split(/\r?\n/);
+  const parseLine = line => {
+    const out = [];
+    let cur = '';
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (c === ',' && !inQ) {
+        out.push(cur);
+        cur = '';
+      } else cur += c;
+    }
+    out.push(cur);
+    return out;
+  };
+  return lines.map(parseLine);
+}
+
+/**
+ * 파일 → 2D 배열 (CSV 또는 XLSX 자동 판정)
+ */
+async function fileToGrid(file) {
+  const name = (file.name || '').toLowerCase();
+  if (name.endsWith('.csv')) {
+    const text = await file.text();
+    return parseCSVToGrid(text);
+  }
+  // XLSX
+  await loadSheetJS();
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sheetName = wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  // 2D 배열로 (header:1 = 첫 행도 데이터로)
+  const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+  return grid;
+}
+
+async function previewCampaignCSV(fileOverride) {
+  const input = document.getElementById('camp-csv-input');
+  const statusEl = document.getElementById('camp-csv-status');
+  const actionRow = document.getElementById('camp-action-row');
+  const dropText = document.getElementById('camp-drop-text');
+
+  const file = fileOverride || (input && input.files && input.files[0]);
+  if (!file) {
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = '<span style="color:var(--bad);">파일을 선택하세요</span>';
+    }
+    return;
+  }
+
+  if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '읽는 중...'; }
+
+  try {
+    const grid = await fileToGrid(file);
+    const blocks = extractCampaignBlocks(grid);
+
+    if (!blocks.length) {
+      statusEl.innerHTML = '<span style="color:var(--bad);">캠페인 블록을 찾지 못함<br>' +
+        '양식을 확인하세요 (첫 셀에 "타이틀" 키 필요)</span>';
+      return;
+    }
+
+    // 요약
+    const titles = [...new Set(blocks.map(b => b['타이틀']).filter(Boolean))];
+    const networks = [...new Set(blocks.map(b => b['네트워크']).filter(Boolean))];
+    const eventCount = blocks.reduce((sum, b) => sum + (b.events || []).length, 0);
+    const singleCount = blocks.filter(b => (b.events || []).length === 1).length;
+    const multiCount = blocks.filter(b => (b.events || []).length > 1).length;
+    const liveCount = blocks.filter(b => b['상태'] === '라이브').length;
+    const endCount = blocks.filter(b => b['상태'] === '종료').length;
+
+    if (dropText) dropText.textContent = '✓ ' + file.name;
+
+    statusEl.innerHTML =
+      '<div style="color:var(--text); line-height:1.9;">' +
+      '<strong>📋 ' + file.name + '</strong> <span style="color:var(--text-dim);">(' + (file.size/1024).toFixed(1) + ' KB)</span><br>' +
+      '<strong>블록</strong>: ' + blocks.length + '개 · <strong>타이틀</strong>: ' + titles.length + '개 · <strong>네트워크</strong>: ' + networks.length + '개<br>' +
+      '<strong>이벤트 조건</strong>: 총 ' + eventCount + '건 (싱글 ' + singleCount + ' / 멀티 ' + multiCount + ')<br>' +
+      '<strong>상태</strong>: ' + (liveCount ? '라이브 ' + liveCount + '개' : '') + (endCount ? (liveCount ? ' · ' : '') + '종료 ' + endCount + '개' : '') +
+      '<div style="margin-top:8px; font-size:11px; color:var(--text-dim);">미리보기 샘플:<br>' +
+      blocks.slice(0, 3).map(b =>
+        '&nbsp;&nbsp;• ' + (b['타이틀'] || '?') + ' × ' + (b['네트워크'] || '?') +
+        ' (' + (b.events || []).length + '이벤트)' +
+        (b['상태'] ? ' [' + b['상태'] + ']' : '')
+      ).join('<br>') +
+      '</div>' +
+      '</div>';
+
+    actionRow.style.display = 'flex';
+
+    // 파싱 결과 저장 (업로드 재사용)
+    window._parsedCampaignBlocks = blocks;
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--bad);">파싱 오류: ' + e.message + '</span>';
+    console.error(e);
+  }
+}
+
+function cancelCampaignCSV() {
+  const input = document.getElementById('camp-csv-input');
+  const statusEl = document.getElementById('camp-csv-status');
+  const actionRow = document.getElementById('camp-action-row');
+  const dropText = document.getElementById('camp-drop-text');
+  if (input) input.value = '';
+  if (statusEl) { statusEl.style.display = 'none'; statusEl.innerHTML = ''; }
+  if (actionRow) actionRow.style.display = 'none';
+  if (dropText) dropText.textContent = '캠페인 세팅 파일을 드롭하세요';
+  window._parsedCampaignBlocks = null;
+}
+
+async function uploadCampaignCSV() {
+  const statusEl = document.getElementById('camp-csv-status');
+  const blocks = window._parsedCampaignBlocks;
+
+  if (!blocks || !blocks.length) {
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = '<span style="color:var(--bad);">먼저 파일을 선택하고 미리보기를 확인하세요</span>'; }
+    return;
+  }
+
+  const url = document.getElementById('cfg-sheet-url')?.value?.trim();
+  if (!url) {
+    statusEl.innerHTML = '<span style="color:var(--bad);">Apps Script URL 없음</span>';
+    return;
+  }
+  const pw = sessionStorage.getItem('minilog-pw') || '';
+
+  if (!confirm('업로드 확인\n\n블록 수: ' + blocks.length + '개\n이벤트 조건: ' + blocks.reduce((s,b)=>s+(b.events||[]).length,0) + '건\n\n같은 (타이틀+네트워크+OS+이벤트) 조합은 덮어쓰여집니다.\n진행?')) {
+    return;
+  }
+
+  statusEl.innerHTML = '<span style="color:var(--text-dim);">전송 중... (' + blocks.length + '블록)</span>';
+
+  try {
+    const body = new URLSearchParams();
+    body.append('action', 'uploadCampaignSettings');
+    body.append('pw', pw);
+    body.append('blocks', JSON.stringify(blocks));
+
+    const resp = await fetch(url, { method: 'POST', body: body });
+    const result = await resp.json();
+
+    if (result.ok) {
+      statusEl.innerHTML =
+        '<div style="color:var(--good); line-height:1.8;">' +
+        '<strong>✓ 업로드 완료</strong><br>' +
+        '신규 추가: ' + result.added + '건 · 업데이트: ' + result.updated + '건<br>' +
+        (result.notWhitelisted ? '화이트리스트 아님 (건너뜀): ' + result.notWhitelisted + '건' : '') +
+        '</div>';
+
+      setTimeout(() => {
+        if (typeof clearCache === 'function') clearCache();
+        if (typeof syncFromSheet === 'function') syncFromSheet(true);
+        cancelCampaignCSV();
+      }, 2000);
+    } else {
+      statusEl.innerHTML = '<span style="color:var(--bad);">실패: ' + (result.error || 'unknown') + '</span>';
+    }
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--bad);">네트워크 오류: ' + e.message + '</span>';
+  }
+}
+
+function bindCampaignDropZone() {
+  const zone = document.getElementById('camp-drop-zone');
+  const input = document.getElementById('camp-csv-input');
+  if (!zone || zone._bound) return;
+  zone._bound = true;
+
+  if (input) {
+    input.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) previewCampaignCSV(f);
+    });
+  }
+
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    zone.style.borderColor = 'var(--accent)';
+    zone.style.background = 'var(--accent-soft, rgba(59,130,246,0.1))';
+  });
+  zone.addEventListener('dragleave', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    zone.style.borderColor = '';
+    zone.style.background = 'var(--bg-elev)';
+  });
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    zone.style.borderColor = '';
+    zone.style.background = 'var(--bg-elev)';
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      const f = files[0];
+      const n = f.name.toLowerCase();
+      if (!n.endsWith('.csv') && !n.endsWith('.xlsx') && !n.endsWith('.xls')) {
+        alert('CSV 또는 XLSX 파일만 가능합니다');
+        return;
+      }
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        input.files = dt.files;
+      } catch(err) {}
+      previewCampaignCSV(f);
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', bindCampaignDropZone);
+setTimeout(bindCampaignDropZone, 500);
+setTimeout(bindCampaignDropZone, 2000);
 
 
 // 캐시에서 먼저 로드 시도 (페이지 시작 시)
