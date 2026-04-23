@@ -1941,6 +1941,58 @@
   <div class="title-grid" id="title-grid"></div>
 </section>
 
+<!-- ========== 🚦 진행 중 캠페인 ========== -->
+<section class="view" id="view-livecampaign">
+  <h1 class="section-title">진행 중 <span class="accent">캠페인</span></h1>
+  <div class="section-desc">슬랙 #캠페인 채널 기반 · 각 타이틀별로 현재 라이브 중인 캠페인을 확인할 수 있습니다.</div>
+
+  <div style="display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;">
+    <div class="kpi-card">
+      <div class="kpi-label">📦 활성 타이틀</div>
+      <div class="kpi-value" id="lc-active-titles">—</div>
+      <div class="kpi-sub" id="lc-active-titles-sub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">🚦 진행 중 캠페인</div>
+      <div class="kpi-value" id="lc-active-campaigns">—</div>
+      <div class="kpi-sub" id="lc-active-campaigns-sub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">⏸ 대기/홀딩</div>
+      <div class="kpi-value" id="lc-holding">—</div>
+      <div class="kpi-sub" id="lc-holding-sub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">🔕 캠페인 없음</div>
+      <div class="kpi-value" id="lc-silent">—</div>
+      <div class="kpi-sub" id="lc-silent-sub">화이트리스트 중 미활성</div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap;">
+    <label style="font-size: 12px; color: var(--text-dim);">필터:</label>
+    <select id="lc-filter-status" class="gf-select" style="min-width: 140px;">
+      <option value="all">전체 타이틀</option>
+      <option value="active" selected>진행 중만</option>
+      <option value="holding">대기/홀딩만</option>
+      <option value="silent">캠페인 없음</option>
+    </select>
+    <select id="lc-filter-sort" class="gf-select" style="min-width: 140px;">
+      <option value="recent">최근 활동순</option>
+      <option value="name">타이틀명순</option>
+      <option value="count">캠페인 수</option>
+    </select>
+    <input type="text" id="lc-filter-search" placeholder="🔍 타이틀 검색..." class="gf-select" style="min-width: 180px;">
+    <span style="font-size: 11px; color: var(--text-faint); margin-left: auto;">최근 14일 슬랙 메시지 기반</span>
+  </div>
+
+  <div id="lc-title-cards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px;"></div>
+
+  <div id="lc-empty" class="hidden" style="text-align: center; padding: 40px; color: var(--text-faint); font-size: 13px;">
+    슬랙 캠페인 로그가 비어있거나 화이트리스트 타이틀에 해당하는 캠페인이 없습니다.
+  </div>
+</section>
+
 <!-- ========== 🎯 이벤트 달성률 분석 ========== -->
 <section class="view" id="view-eventanalysis">
   <h1 class="section-title">이벤트 <span class="accent">달성률 분석</span></h1>
@@ -2847,7 +2899,8 @@ const MAIN_TABS = {
     subtabs: [
       { id: 'overview',  label: '종합 현황' },
       { id: 'bleed',     label: '🩸 손해 추적', alert: true },
-      { id: 'titles',    label: '타이틀 현황' }
+      { id: 'titles',    label: '타이틀 현황' },
+      { id: 'livecampaign', label: '🚦 진행 중 캠페인' }
     ]
   },
   analysis: {
@@ -2996,6 +3049,26 @@ function setupGlobalFilter() {
   }
 }
 setupGlobalFilter();
+
+// 진행 중 캠페인 필터
+['lc-filter-status', 'lc-filter-sort', 'lc-filter-search'].forEach(id => {
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', () => renderLiveCampaign());
+      if (id === 'lc-filter-search') el.addEventListener('input', () => renderLiveCampaign());
+    }
+  });
+  // 이미 DOM 로드된 경우
+  setTimeout(() => {
+    const el = document.getElementById(id);
+    if (el && !el._lcBound) {
+      el._lcBound = true;
+      el.addEventListener('change', () => renderLiveCampaign());
+      if (id === 'lc-filter-search') el.addEventListener('input', () => renderLiveCampaign());
+    }
+  }, 500);
+});
 
 // 네트워크 드롭다운 채우기 (데이터 로드 시 호출)
 function populateNetworkFilter() {
@@ -3382,13 +3455,18 @@ async function loadOlderData() {
 async function triggerSingularSync() {
   const url = getSheetUrl();
   if (!url) { setStatus('URL을 먼저 입력하세요', 'err'); return; }
-  setStatus('싱귤러 API 동기화 시작... (최대 5분 · 대용량이면 길어짐)', 'info');
+  
+  // 기간 선택 prompt
+  const daysInput = prompt('며칠치 동기화할까요? (3~30, 기본 14)', '14');
+  if (daysInput === null) return;
+  const days = Math.max(3, Math.min(30, parseInt(daysInput, 10) || 14));
+  
+  setStatus(`싱귤러 API 동기화 시작 (${days}일치)... 최대 5분 소요`, 'info');
   try {
-    const res = await authFetch(url, '?action=syncSingular');
+    const res = await authFetch(url, '?action=syncSingular&days=' + days);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    setStatus(`싱귤러 동기화 완료 · ${data.rows || 0}행 처리 · ${data.elapsed || '?'}초`, 'ok');
-    // 완료되면 자동으로 데이터 다시 읽기
+    setStatus(`싱귤러 동기화 완료 · ${data.rows || 0}행 (${data.days || days}일) · ${data.elapsed || '?'}초`, 'ok');
     setTimeout(syncFromSheet, 500);
   } catch (e) {
     setStatus('싱귤러 동기화 실패: ' + e.message, 'err');
@@ -3635,6 +3713,7 @@ function renderViewById(id) {
     else if (id === 'view-slack') renderSlack();
     else if (id === 'view-calendar') { renderCalendar(); renderCalDetail(); }
     else if (id === 'view-titles') renderTitles();
+    else if (id === 'view-livecampaign') renderLiveCampaign();
     // eventanalysis는 CSV 업로드 시에만 렌더됨
     RENDER_CACHE[id] = true;
   } catch(e) {
@@ -4893,6 +4972,241 @@ function renderTitles() {
   }).join('');
   document.getElementById('title-grid').innerHTML = html;
   document.getElementById('titles-sub').textContent = titleList.length + '개 타이틀 · ' + byApp.size + '개 활성';
+}
+
+// ===== 🚦 진행 중 캠페인 =====
+const APP_WHITELIST = [
+  'Taptap2048', 'Merge Hexa', 'Wood Block Capybara', 'Toy Block',
+  'Merge Fruit juice', 'Juicy Pop', 'Fruit Blast', 'Brain Crunch',
+  'Tanghulu Chomp', '냥냥팡팡', 'StarFruitJuice', 'AnyPong',
+  'Anypop : Zoo Blast', 'BrainSpark', 'MarkBlock', 'Catculator',
+  'Bubble2048', 'TapDrag', 'TapTapMatch : Sudoku Puzzle',
+  'Woodblockdoku', 'Sugar Bang', 'Number Block Drag',
+  'Bubble Pinogpong', 'SortJuice'
+];
+
+function renderLiveCampaign() {
+  const campaigns = (STATE.slack && STATE.slack.campaign) || [];
+  const emptyEl = document.getElementById('lc-empty');
+  const gridEl = document.getElementById('lc-title-cards');
+
+  // 최근 14일 데이터만
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 14);
+  const recent = campaigns.filter(c => {
+    if (!c.timestamp) return false;
+    const d = new Date(c.timestamp);
+    return !isNaN(d) && d >= cutoff;
+  });
+
+  // 타이틀 매칭 (캠페인 title 또는 note에서 화이트리스트 앱 찾기)
+  const titleMap = new Map(); // App -> [campaigns]
+  APP_WHITELIST.forEach(app => titleMap.set(app, []));
+
+  recent.forEach(c => {
+    const searchText = ((c.title || '') + ' ' + (c.note || '') + ' ' + (c.campaign_name || '')).toLowerCase();
+    APP_WHITELIST.forEach(app => {
+      const appLower = app.toLowerCase();
+      if (searchText.indexOf(appLower) !== -1) {
+        titleMap.get(app).push(c);
+      }
+    });
+  });
+
+  // 각 타이틀의 현재 상태 판정
+  const titleStates = [];
+  titleMap.forEach((camps, app) => {
+    // 최신 메시지부터 정렬
+    camps.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+
+    // 네트워크별로 최신 상태 추적
+    const byNetwork = new Map();
+    camps.forEach(c => {
+      const net = c.network || '—';
+      if (!byNetwork.has(net)) byNetwork.set(net, c); // 최신만 저장
+    });
+
+    // 활성 상태 카운트
+    let activeCount = 0, holdingCount = 0, endedCount = 0;
+    byNetwork.forEach(c => {
+      const a = c.action || '';
+      if (a === '신규라이브' || a === '재개' || a === '캡조정' || a === '골조정' || a === '소재변경') activeCount++;
+      else if (a === '대기') holdingCount++;
+      else if (a === '종료') endedCount++;
+    });
+
+    let status = 'silent';
+    if (activeCount > 0) status = 'active';
+    else if (holdingCount > 0) status = 'holding';
+    else if (endedCount > 0) status = 'ended';
+
+    titleStates.push({
+      app,
+      campaigns: camps,
+      byNetwork: Array.from(byNetwork.entries()),
+      activeCount,
+      holdingCount,
+      endedCount,
+      status,
+      lastTs: camps[0] ? camps[0].timestamp : null
+    });
+  });
+
+  // KPI
+  const activeTitles = titleStates.filter(t => t.status === 'active').length;
+  const totalActiveCampaigns = titleStates.reduce((s, t) => s + t.activeCount, 0);
+  const totalHolding = titleStates.reduce((s, t) => s + t.holdingCount, 0);
+  const silentTitles = titleStates.filter(t => t.status === 'silent').length;
+
+  const $ = id => document.getElementById(id);
+  if ($('lc-active-titles')) $('lc-active-titles').textContent = activeTitles;
+  if ($('lc-active-titles-sub')) $('lc-active-titles-sub').textContent = `/ ${APP_WHITELIST.length}개 중`;
+  if ($('lc-active-campaigns')) $('lc-active-campaigns').textContent = totalActiveCampaigns;
+  if ($('lc-active-campaigns-sub')) $('lc-active-campaigns-sub').textContent = '네트워크별 합산';
+  if ($('lc-holding')) $('lc-holding').textContent = totalHolding;
+  if ($('lc-holding-sub')) $('lc-holding-sub').textContent = '대기 상태';
+  if ($('lc-silent')) $('lc-silent').textContent = silentTitles;
+
+  // 필터 적용
+  const statusFilter = $('lc-filter-status') ? $('lc-filter-status').value : 'active';
+  const sortBy = $('lc-filter-sort') ? $('lc-filter-sort').value : 'recent';
+  const search = ($('lc-filter-search') ? $('lc-filter-search').value : '').toLowerCase().trim();
+
+  let filtered = titleStates;
+  if (statusFilter === 'active') filtered = filtered.filter(t => t.status === 'active');
+  else if (statusFilter === 'holding') filtered = filtered.filter(t => t.status === 'holding');
+  else if (statusFilter === 'silent') filtered = filtered.filter(t => t.status === 'silent');
+
+  if (search) {
+    filtered = filtered.filter(t => t.app.toLowerCase().indexOf(search) !== -1);
+  }
+
+  if (sortBy === 'name') filtered.sort((a, b) => a.app.localeCompare(b.app));
+  else if (sortBy === 'count') filtered.sort((a, b) => (b.activeCount + b.holdingCount) - (a.activeCount + a.holdingCount));
+  else filtered.sort((a, b) => (b.lastTs || '').localeCompare(a.lastTs || ''));
+
+  if (!filtered.length) {
+    emptyEl.classList.remove('hidden');
+    gridEl.innerHTML = '';
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  // 카드 렌더
+  gridEl.innerHTML = filtered.map(t => {
+    const statusBadge = {
+      active: '<span style="background:#10b981;color:white;padding:2px 8px;border-radius:10px;font-size:10px;">🚦 진행중</span>',
+      holding: '<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:10px;font-size:10px;">⏸ 대기</span>',
+      ended: '<span style="background:#94a3b8;color:white;padding:2px 8px;border-radius:10px;font-size:10px;">🛑 종료</span>',
+      silent: '<span style="background:#e5e7eb;color:#6b7280;padding:2px 8px;border-radius:10px;font-size:10px;">🔕 조용</span>'
+    }[t.status];
+
+    const networks = t.byNetwork.slice(0, 5).map(([net, c]) => {
+      const actionColor = {
+        '신규라이브': '#10b981',
+        '재개': '#10b981',
+        '캡조정': '#3b82f6',
+        '골조정': '#3b82f6',
+        '소재변경': '#8b5cf6',
+        '대기': '#f59e0b',
+        '홀딩': '#f59e0b',
+        '종료': '#94a3b8',
+        '기타': '#6b7280'
+      }[c.action] || '#6b7280';
+
+      const ts = c.timestamp ? c.timestamp.slice(5, 16) : '';
+      return `<div style="padding:6px 0; border-bottom:1px solid var(--border); font-size:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <span style="font-weight:600;">${net}</span>
+          <span style="background:${actionColor}22; color:${actionColor}; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600;">${c.action || '—'}</span>
+        </div>
+        ${c.budget ? `<div style="font-size:11px; color:var(--text-dim); margin-top:3px;">${c.budget}</div>` : ''}
+        <div style="font-size:10px; color:var(--text-faint); margin-top:2px;">${ts} · ${c.author || '—'}${c.os !== '—' ? ' · ' + c.os : ''}${c.country !== '—' ? ' · ' + c.country : ''}</div>
+      </div>`;
+    }).join('');
+
+    const moreCount = t.byNetwork.length - 5;
+
+    return `<div class="kpi-card" style="padding:14px; cursor:pointer;" data-action="showLiveCampaignDetail" data-args="'${t.app.replace(/'/g, "\\'")}'">
+      <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px; gap:8px;">
+        <div style="font-weight:700; font-size:14px; color:var(--text);">${t.app}</div>
+        ${statusBadge}
+      </div>
+      <div style="display:flex; gap:12px; margin-bottom:10px; font-size:11px; color:var(--text-dim);">
+        <span>🚦 ${t.activeCount}</span>
+        <span>⏸ ${t.holdingCount}</span>
+        <span>🛑 ${t.endedCount}</span>
+      </div>
+      ${networks || '<div style="font-size:11px; color:var(--text-faint); padding:10px 0;">최근 14일간 캠페인 없음</div>'}
+      ${moreCount > 0 ? `<div style="text-align:center; font-size:10px; color:var(--text-dim); margin-top:6px;">+${moreCount}개 네트워크 더</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// 타이틀 상세 모달 (클릭시)
+function showLiveCampaignDetail(app) {
+  const campaigns = (STATE.slack && STATE.slack.campaign) || [];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const appLower = app.toLowerCase();
+  const related = campaigns.filter(c => {
+    if (!c.timestamp) return false;
+    const d = new Date(c.timestamp);
+    if (isNaN(d) || d < cutoff) return false;
+    const text = ((c.title || '') + ' ' + (c.note || '') + ' ' + (c.campaign_name || '')).toLowerCase();
+    return text.indexOf(appLower) !== -1;
+  });
+
+  related.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+
+  const rows = related.map(c => `<tr style="border-bottom:1px solid var(--border);">
+    <td style="padding:6px 8px; font-size:11px; white-space:nowrap;">${c.timestamp || '—'}</td>
+    <td style="padding:6px 8px; font-size:12px;">${c.network || '—'}</td>
+    <td style="padding:6px 8px; font-size:12px; font-weight:600;">${c.action || '—'}</td>
+    <td style="padding:6px 8px; font-size:11px; color:var(--text-dim);">${c.os || '—'} · ${c.country || '—'}</td>
+    <td style="padding:6px 8px; font-size:11px;">${(c.budget || '').slice(0, 40)}</td>
+    <td style="padding:6px 8px; font-size:11px; color:var(--text-faint);">${c.author || '—'}</td>
+  </tr>`).join('');
+
+  const content = `<div style="padding:20px; max-width:900px;">
+    <h3 style="margin:0 0 12px; font-size:18px;">${app} — 최근 30일 캠페인 이력</h3>
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:16px;">총 ${related.length}개 메시지</div>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="background:var(--bg); border-bottom:2px solid var(--border);">
+          <th style="padding:6px 8px; text-align:left; font-size:11px;">시간</th>
+          <th style="padding:6px 8px; text-align:left; font-size:11px;">네트워크</th>
+          <th style="padding:6px 8px; text-align:left; font-size:11px;">액션</th>
+          <th style="padding:6px 8px; text-align:left; font-size:11px;">OS/국가</th>
+          <th style="padding:6px 8px; text-align:left; font-size:11px;">예산</th>
+          <th style="padding:6px 8px; text-align:left; font-size:11px;">담당자</th>
+        </tr>
+      </thead>
+      <tbody>${rows || '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--text-faint);">데이터 없음</td></tr>'}</tbody>
+    </table>
+  </div>`;
+
+  openLiveCampaignModal(content);
+}
+
+function openLiveCampaignModal(html) {
+  let modal = document.getElementById('lc-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'lc-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;';
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `<div style="background:var(--card); border-radius:8px; max-width:95%; max-height:90vh; overflow:auto; position:relative;">
+    <button data-action="closeLiveCampaignModal" style="position:absolute; top:10px; right:10px; background:transparent; border:none; font-size:20px; cursor:pointer;">✕</button>
+    ${html}
+  </div>`;
+}
+
+function closeLiveCampaignModal() {
+  const m = document.getElementById('lc-modal');
+  if (m) m.remove();
 }
 
 /* ============================================================
