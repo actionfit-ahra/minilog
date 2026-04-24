@@ -522,6 +522,50 @@
   #view-eventanalysis .subview { display: block; }
   #view-eventanalysis .subview.hidden { display: none; }
 
+  /* 📂 이벤트 드롭존 */
+  .ev-dropzone {
+    border: 2px dashed var(--border-strong);
+    border-radius: 10px;
+    background: var(--bg-card);
+    padding: 28px;
+    margin-bottom: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .ev-dropzone:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .ev-dropzone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    transform: scale(1.01);
+  }
+  .ev-dropzone-inner { padding: 10px; }
+
+  /* 이벤트 메인 테이블 */
+  .ev-main-row { cursor: pointer; transition: background 0.1s; }
+  .ev-main-row:hover { background: var(--bg-hover); }
+  .ev-main-row.expanded { background: var(--accent-soft); }
+  .ev-main-row td { padding: 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .ev-expand-icon {
+    display: inline-block; width: 18px; height: 18px;
+    transition: transform 0.15s;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  .ev-main-row.expanded .ev-expand-icon { transform: rotate(90deg); color: var(--accent); }
+
+  /* 이벤트 드릴다운 상세 */
+  .ev-detail-row td { padding: 0; background: var(--bg); }
+  .ev-detail-wrap { padding: 12px 18px; }
+  .ev-detail-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: 4px; overflow: hidden; }
+  .ev-detail-table th, .ev-detail-table td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid var(--border); }
+  .ev-detail-table th { background: var(--bg); font-weight: 600; color: var(--text-dim); text-align: left; }
+  .ev-detail-table td { text-align: right; }
+  .ev-detail-table td:first-child { text-align: left; font-weight: 500; }
+
   /* 비교 모드 KPI */
   .kpi-delta {
     font-size: 10px;
@@ -2267,148 +2311,92 @@
   </div>
 </section>
 
-<!-- ========== 이벤트 분석 (재작성) ========== -->
+<!-- ========== 이벤트 분석 (v2) ========== -->
 <section class="view" id="view-eventanalysis">
   <h1 class="section-title">이벤트 <span class="accent">분석</span></h1>
-  <div class="section-desc">이벤트 CSV + 캠페인 캘린더 + Singular D1 Rev를 결합해서 달성률과 예상 비용, ROI를 계산합니다.</div>
+  <div class="section-desc">이벤트 Raw Data CSV + 대시보드 데이터로 타이틀별 달성률과 예상 비용을 계산합니다.</div>
 
-  <!-- 서브탭 -->
-  <div class="subtabs" id="event-subtabs">
-    <button class="subtab active" data-esub="profit">분석 결과</button>
-    <button class="subtab" data-esub="upload">데이터 업로드</button>
-  </div>
-
-  <!-- 데이터 업로드 서브뷰 -->
-  <div class="subview hidden" id="esub-upload">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 20px;">
-
-      <!-- 이벤트 CSV -->
-      <div class="kpi-card">
-        <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">1. 이벤트 Raw Data (CSV)</div>
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.5;">
-          매체에서 받은 이벤트 로그<br>
-          필수 컬럼: <code>partner</code>, <code>name</code>, <code>device id</code>
-        </div>
-        <input type="file" id="ev-upload-events" accept=".csv" style="font-size: 12px; width: 100%;">
-        <div id="ev-status-events" style="margin-top: 8px; font-size: 11px; color: var(--text-dim);">대기 중</div>
+  <!-- 드롭존 -->
+  <div id="ev-dropzone" class="ev-dropzone">
+    <input type="file" id="ev-upload-events" accept=".csv" style="display: none;">
+    <div class="ev-dropzone-inner" id="ev-dropzone-inner">
+      <div style="font-size: 36px; margin-bottom: 8px;">📂</div>
+      <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">이벤트 Raw Data CSV 업로드</div>
+      <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;">
+        파일을 여기에 드래그하거나 클릭해서 선택<br>
+        <code style="font-size: 10px;">partner</code>,
+        <code style="font-size: 10px;">name</code>,
+        <code style="font-size: 10px;">device id</code> 컬럼 필요
       </div>
-
-      <!-- Singular D1 Rev CSV -->
-      <div class="kpi-card">
-        <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">2. Singular D1 Rev (선택)</div>
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.5;">
-          기본은 대시보드 데이터를 자동 사용<br>
-          별도 CSV가 있으면 업로드 가능
-        </div>
-        <input type="file" id="ev-upload-singular" accept=".csv" style="font-size: 12px; width: 100%;">
-        <div id="ev-status-singular" style="margin-top: 8px; font-size: 11px; color: var(--text-dim);">대시보드 데이터 자동 사용 중</div>
-      </div>
-
-      <!-- 캘린더 -->
-      <div class="kpi-card">
-        <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">3. 캠페인 캘린더 (자동)</div>
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.5;">
-          슬랙에서 파싱된 캠페인 세팅 이력<br>
-          (최신 단가 기준 자동 매핑)
-        </div>
-        <div id="ev-status-calendar" style="font-size: 12px; padding: 10px 0;">대시보드 데이터 기준 — 자동 로드됨</div>
-        <button class="btn sm" data-action="refreshEventCalendar">캘린더 새로고침</button>
-      </div>
+      <button class="btn primary sm" id="ev-upload-btn">파일 선택</button>
     </div>
-
-    <div style="text-align: center; margin-top: 20px;">
-      <button class="btn primary" data-action="runEventAnalysis">분석 실행</button>
-      <button class="btn" data-action="loadSampleEventData">샘플 데이터로 체험</button>
-    </div>
-
-    <div id="ev-upload-info" style="margin-top: 16px; padding: 14px; background: var(--bg); border-radius: 6px; font-size: 12px; color: var(--text-dim); line-height: 1.7;">
-      <strong>사용 방법</strong><br>
-      1. 이벤트 Raw Data CSV 업로드 (필수)<br>
-      2. Singular D1 Rev CSV 업로드 (ROI 계산 시 필요)<br>
-      3. 캘린더는 대시보드에서 자동으로 가져옴 (캠페인 탭 데이터)<br>
-      4. "분석 실행" 클릭 → 테이블 생성
+    <div id="ev-dropzone-loaded" class="hidden" style="padding: 20px;">
+      <div style="font-size: 14px; font-weight: 600; color: var(--accent); margin-bottom: 4px;">✅ CSV 로드 완료</div>
+      <div id="ev-status-events" style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;">—</div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn primary sm" data-action="runEventAnalysis">분석 실행</button>
+        <button class="btn sm" id="ev-upload-reset">다른 파일</button>
+      </div>
     </div>
   </div>
 
-  <!-- 분석 결과 서브뷰 -->
-  <div class="subview" id="esub-profit">
-    <div id="ev-result-empty" style="padding: 40px; text-align: center; color: var(--text-faint); font-size: 13px;">
-      먼저 "데이터 업로드" 탭에서 CSV를 업로드하고 분석을 실행해주세요.
+  <!-- 결과 -->
+  <div id="ev-result-empty" style="padding: 40px; text-align: center; color: var(--text-faint); font-size: 13px;">
+    CSV를 업로드하면 분석 결과가 여기 표시됩니다.
+  </div>
+
+  <div id="ev-result-wrap" class="hidden">
+
+    <!-- 타이틀 헤더 -->
+    <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 16px; padding: 14px 18px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">
+      <div style="font-size: 24px;">🎯</div>
+      <div>
+        <div style="font-size: 11px; color: var(--text-dim);">분석 대상 타이틀</div>
+        <div id="ev-title-name" style="font-size: 18px; font-weight: 700;">—</div>
+      </div>
+      <div style="margin-left: auto; display: flex; gap: 20px;">
+        <div style="text-align: right;">
+          <div style="font-size: 11px; color: var(--text-dim);">총 인스톨</div>
+          <div id="ev-total-installs" style="font-size: 16px; font-weight: 600;">0</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 11px; color: var(--text-dim);">총 달성</div>
+          <div id="ev-total-achieve" style="font-size: 16px; font-weight: 600;">0</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 11px; color: var(--text-dim);">평균 달성률</div>
+          <div id="ev-total-rate" style="font-size: 16px; font-weight: 600;">0%</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 11px; color: var(--text-dim);">예상 총 비용</div>
+          <div id="ev-total-cost" style="font-size: 16px; font-weight: 600; color: var(--accent);">$0</div>
+        </div>
+      </div>
     </div>
 
-    <div id="ev-result-wrap" class="hidden">
-      <!-- 요약 -->
-      <div class="kpi-grid" style="margin-bottom: 16px;">
-        <div class="kpi-card">
-          <div class="kpi-label">전체 행</div>
-          <div class="kpi-value" id="ev2-total-rows">0</div>
-          <div class="kpi-sub" id="ev2-total-sub">그룹핑된 캠페인 수</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">예상 총 비용</div>
-          <div class="kpi-value" id="ev2-total-cost">0</div>
-          <div class="kpi-sub" id="ev2-total-cost-sub">달성인원 × 단가</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">D1 Rev 합</div>
-          <div class="kpi-value" id="ev2-total-rev">0</div>
-          <div class="kpi-sub">Singular 합계</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">캘린더 미등록</div>
-          <div class="kpi-value" id="ev2-missing-cal">0</div>
-          <div class="kpi-sub" id="ev2-missing-cal-sub">단가 매핑 실패</div>
+    <!-- 메인 테이블: OS × 네트워크 -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">네트워크별 달성률</div>
+        <div class="panel-meta" style="margin-left: auto; font-size: 11px; color: var(--text-dim);">
+          네트워크 행을 클릭하면 이벤트별 상세가 펼쳐집니다
         </div>
       </div>
-
-      <!-- 필터 -->
-      <div style="display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap;">
-        <input type="text" id="ev2-search" placeholder="타이틀/캠페인 검색..." class="gf-select" style="min-width: 220px;">
-        <select id="ev2-filter-profit" class="gf-select">
-          <option value="">손익 전체</option>
-          <option value="profit">수익 (+)</option>
-          <option value="loss">손해 (-)</option>
-        </select>
-        <select id="ev2-filter-mapped" class="gf-select">
-          <option value="">캘린더 전체</option>
-          <option value="mapped">매핑 성공</option>
-          <option value="unmapped">매핑 실패</option>
-        </select>
-        <select id="ev2-filter-network" class="gf-select">
-          <option value="">네트워크 전체</option>
-        </select>
-        <span style="font-size: 11px; color: var(--text-faint); margin-left: auto;" id="ev2-filter-info"></span>
-      </div>
-
-      <!-- 결과 테이블 -->
-      <div style="overflow-x: auto; border: 1px solid var(--border); border-radius: 6px;">
-        <table class="ev2-table" id="ev2-result-table" style="width: 100%; border-collapse: collapse;">
+      <div style="overflow-x: auto;">
+        <table class="ev2-table" id="ev-main-table" style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr style="background: var(--bg); border-bottom: 2px solid var(--border);">
-              <th style="padding: 10px; text-align: left; font-size: 11px; font-weight: 600;">타이틀</th>
+              <th style="padding: 10px; text-align: center; font-size: 11px; font-weight: 600; width: 32px;"></th>
               <th style="padding: 10px; text-align: center; font-size: 11px; font-weight: 600;">OS</th>
-              <th style="padding: 10px; text-align: left; font-size: 11px; font-weight: 600;">캠페인</th>
               <th style="padding: 10px; text-align: left; font-size: 11px; font-weight: 600;">네트워크</th>
-              <th style="padding: 10px; text-align: left; font-size: 11px; font-weight: 600;">이벤트 조건</th>
               <th style="padding: 10px; text-align: right; font-size: 11px; font-weight: 600;">인스톨</th>
               <th style="padding: 10px; text-align: right; font-size: 11px; font-weight: 600;">달성</th>
               <th style="padding: 10px; text-align: right; font-size: 11px; font-weight: 600;">달성률</th>
-              <th style="padding: 10px; text-align: right; font-size: 11px; font-weight: 600;">단가</th>
               <th style="padding: 10px; text-align: right; font-size: 11px; font-weight: 600;">예상 비용</th>
-              <th style="padding: 10px; text-align: right; font-size: 11px; font-weight: 600;">D1 Rev</th>
-              <th style="padding: 10px; text-align: right; font-size: 11px; font-weight: 600;">ROI</th>
-              <th style="padding: 10px; text-align: right; font-size: 11px; font-weight: 600;">손익</th>
-              <th style="padding: 10px; text-align: center; font-size: 11px; font-weight: 600;">액션</th>
             </tr>
           </thead>
-          <tbody id="ev2-result-tbody"></tbody>
+          <tbody id="ev-main-tbody"></tbody>
         </table>
-      </div>
-
-      <div style="margin-top: 14px; font-size: 11px; color: var(--text-dim);">
-        <span style="display: inline-block; width: 14px; height: 10px; background: #dcfce7; margin-right: 4px; vertical-align: middle;"></span> 수익 구간 &nbsp;&nbsp;
-        <span style="display: inline-block; width: 14px; height: 10px; background: #fee2e2; margin-right: 4px; vertical-align: middle;"></span> 손해 구간 &nbsp;&nbsp;
-        이벤트 조건명은 네트워크별 색상 적용
       </div>
     </div>
   </div>
@@ -7653,6 +7641,8 @@ function onEventCsvChange(ev) {
   const file = ev.target.files[0];
   if (!file) return;
   const statusEl = document.getElementById('ev-status-events');
+  const dropInner = document.getElementById('ev-dropzone-inner');
+  const dropLoaded = document.getElementById('ev-dropzone-loaded');
   if (statusEl) statusEl.textContent = '읽는 중...';
   loadPapaParse(() => {
     const reader = new FileReader();
@@ -7661,7 +7651,12 @@ function onEventCsvChange(ev) {
         const rows = parseCSVString(e.target.result);
         EVENT_STATE2.eventRows = rows;
         saveEventSession();
-        if (statusEl) statusEl.innerHTML = '<span style="color:var(--good); font-weight:600;">' + rows.length.toLocaleString() + '행 로드</span> · ' + file.name;
+        if (statusEl) {
+          statusEl.innerHTML = '<strong>' + rows.length.toLocaleString() + '행</strong> · ' + file.name;
+        }
+        // UI 전환
+        if (dropInner) dropInner.classList.add('hidden');
+        if (dropLoaded) dropLoaded.classList.remove('hidden');
       } catch (err) {
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">파싱 실패: ' + err.message + '</span>';
       }
@@ -7859,19 +7854,6 @@ function runEventAnalysis() {
   });
   EVENT_STATE2.results = results;
   saveEventSession();
-
-  const netFilter = document.getElementById('ev2-filter-network');
-  if (netFilter) {
-    netFilter.innerHTML = '<option value="">네트워크 전체</option>' +
-      [...networks].sort().map(n => '<option value="' + n + '">' + n + '</option>').join('');
-  }
-
-  document.querySelectorAll('#event-subtabs .subtab').forEach(b => b.classList.remove('active'));
-  const profitTab = document.querySelector('#event-subtabs [data-esub="profit"]');
-  if (profitTab) profitTab.classList.add('active');
-  document.querySelectorAll('#view-eventanalysis .subview').forEach(v => v.classList.add('hidden'));
-  const profitView = document.getElementById('esub-profit');
-  if (profitView) profitView.classList.remove('hidden');
   renderEventResults();
 }
 
@@ -7887,68 +7869,125 @@ function renderEventResults() {
   if (emptyEl) emptyEl.style.display = 'none';
   if (wrapEl) wrapEl.classList.remove('hidden');
 
-  const search = (document.getElementById('ev2-search')?.value || '').toLowerCase();
-  const profitF = document.getElementById('ev2-filter-profit')?.value || '';
-  const mappedF = document.getElementById('ev2-filter-mapped')?.value || '';
-  const networkF = document.getElementById('ev2-filter-network')?.value || '';
+  // 타이틀 — 상위 빈도 (하나만 표시 전제)
+  const titleCount = new Map();
+  results.forEach(r => titleCount.set(r.title, (titleCount.get(r.title) || 0) + 1));
+  const topTitle = [...titleCount.entries()].sort((a, b) => b[1] - a[1])[0];
+  const titleName = topTitle ? topTitle[0] : '—';
+  document.getElementById('ev-title-name').textContent = titleName;
 
-  let filtered = results.filter(r => {
-    if (search && !((r.title + ' ' + r.campaign).toLowerCase().includes(search))) return false;
-    if (profitF === 'profit' && r.profit <= 0) return false;
-    if (profitF === 'loss' && r.profit >= 0) return false;
-    if (mappedF === 'mapped' && !r.mapped) return false;
-    if (mappedF === 'unmapped' && r.mapped) return false;
-    if (networkF && r.network !== networkF) return false;
-    return true;
+  // (OS × Network) 로 그룹핑해서 메인 테이블 구성 + 각 그룹 안에 이벤트 상세
+  // 같은 타이틀만 필터링
+  const filteredByTitle = results.filter(r => r.title === titleName);
+
+  const networkGroups = new Map();  // (os|network) → { os, network, installs, achieves, cost, events: [{eventCondition, installs, achieves, rate, payout, cost, campaign}] }
+  filteredByTitle.forEach(r => {
+    const key = r.os + '|' + r.network;
+    if (!networkGroups.has(key)) {
+      networkGroups.set(key, {
+        os: r.os, network: r.network,
+        installs: 0, achieves: 0, cost: 0,
+        events: []
+      });
+    }
+    const g = networkGroups.get(key);
+    g.installs += r.installs;
+    g.achieves += r.achieves;
+    g.cost += r.cost;
+    g.events.push({
+      eventCondition: r.eventCondition || '(미매핑)',
+      campaign: r.campaign,
+      installs: r.installs,
+      achieves: r.achieves,
+      rate: r.installs > 0 ? (r.achieves / r.installs) * 100 : 0,
+      payout: r.payout,
+      cost: r.cost,
+      mapped: r.mapped
+    });
   });
-  filtered.sort((a, b) => b.cost - a.cost);
 
-  const totalCost = results.reduce((s, r) => s + r.cost, 0);
-  const totalRev = results.reduce((s, r) => s + r.d1rev, 0);
-  const missingCal = results.filter(r => !r.mapped).length;
-  const $ = id => document.getElementById(id);
-  if ($('ev2-total-rows')) $('ev2-total-rows').textContent = results.length.toLocaleString();
-  if ($('ev2-total-sub')) $('ev2-total-sub').textContent = filtered.length + '개 표시';
-  if ($('ev2-total-cost')) $('ev2-total-cost').textContent = '₩' + Math.round(totalCost).toLocaleString();
-  if ($('ev2-total-rev')) $('ev2-total-rev').textContent = '₩' + Math.round(totalRev).toLocaleString();
-  if ($('ev2-missing-cal')) $('ev2-missing-cal').textContent = missingCal;
-  if ($('ev2-filter-info')) $('ev2-filter-info').textContent = filtered.length + ' / ' + results.length;
+  // 타이틀 총계
+  let totalInstalls = 0, totalAchieves = 0, totalCost = 0;
+  networkGroups.forEach(g => {
+    totalInstalls += g.installs;
+    totalAchieves += g.achieves;
+    totalCost += g.cost;
+  });
+  const totalRate = totalInstalls > 0 ? (totalAchieves / totalInstalls) * 100 : 0;
+  document.getElementById('ev-total-installs').textContent = totalInstalls.toLocaleString();
+  document.getElementById('ev-total-achieve').textContent = totalAchieves.toLocaleString();
+  document.getElementById('ev-total-rate').textContent = totalRate.toFixed(1) + '%';
+  document.getElementById('ev-total-cost').textContent = '$' + totalCost.toFixed(2).toLocaleString();
 
-  const tbody = document.getElementById('ev2-result-tbody');
+  // 메인 테이블 렌더 (펼침 가능)
+  const tbody = document.getElementById('ev-main-tbody');
   if (!tbody) return;
-  const fmt = n => '₩' + Math.round(n).toLocaleString();
+  const fmt$ = n => '$' + (Math.round(n * 100) / 100).toFixed(2);
   const fmtPct = n => n.toFixed(1) + '%';
 
-  tbody.innerHTML = filtered.map(r => {
-    const bg = !r.mapped ? '#fef3c7' : (r.profit > 0 ? '#dcfce7' : (r.profit < 0 ? '#fee2e2' : ''));
-    const bgStyle = bg ? 'background:' + bg + ';' : '';
-    const evColor = getNetworkColor(r.network);
-    const evCondHtml = r.eventCondition
-      ? '<span style="color:' + evColor + '; font-weight:700;">' + r.eventCondition + '</span>'
-      : (r.mapped ? '<span style="color:var(--text-faint);">—</span>' : '<span style="color:#b45309;">캘린더 정보 없음</span>');
-    const actionHtml = !r.mapped
-      ? '<button class="btn sm" data-action="goToCalendarFromEvent">캘린더에 추가</button>'
-      : '<button class="btn sm" data-action="showEventTitleHistory" data-title="' + r.title + '" data-network="' + r.network + '">이력</button>';
-    const roiColor = r.roi >= 100 ? 'var(--good)' : (r.roi > 0 ? 'var(--warn)' : 'var(--text-faint)');
-    const profitColor = r.profit > 0 ? 'var(--good)' : (r.profit < 0 ? 'var(--bad)' : 'var(--text-faint)');
+  const groups = [...networkGroups.values()].sort((a, b) => b.cost - a.cost);
 
-    return '<tr style="' + bgStyle + ' border-bottom:1px solid var(--border);">' +
-      '<td style="padding:8px 10px; font-size:12px; font-weight:600;">' + r.title + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px; text-align:center; color:var(--text-dim);">' + r.os + '</td>' +
-      '<td style="padding:8px 10px; font-size:10px; font-family:monospace; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + r.campaign + '">' + r.campaign + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px;">' + r.network + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px;">' + evCondHtml + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px; text-align:right; font-family:monospace;">' + r.installs.toLocaleString() + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px; text-align:right; font-family:monospace;">' + r.achieves.toLocaleString() + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px; text-align:right; font-family:monospace;">' + fmtPct(r.achieveRate) + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px; text-align:right; font-family:monospace;">' + (r.payout > 0 ? fmt(r.payout) : '—') + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px; text-align:right; font-family:monospace; font-weight:600;">' + (r.cost > 0 ? fmt(r.cost) : '—') + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px; text-align:right; font-family:monospace;">' + (r.d1rev > 0 ? fmt(r.d1rev) : '—') + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px; text-align:right; font-family:monospace; color:' + roiColor + '; font-weight:600;">' + (r.cost > 0 ? fmtPct(r.roi) : '—') + '</td>' +
-      '<td style="padding:8px 10px; font-size:11px; text-align:right; font-family:monospace; color:' + profitColor + '; font-weight:700;">' + (r.profit !== 0 ? (r.profit > 0 ? '+' : '') + fmt(r.profit) : '—') + '</td>' +
-      '<td style="padding:8px 10px; text-align:center;">' + actionHtml + '</td>' +
+  let html = '';
+  groups.forEach((g, i) => {
+    const rate = g.installs > 0 ? (g.achieves / g.installs) * 100 : 0;
+    const rowId = 'evr-' + i;
+
+    // 메인 행
+    html += '<tr class="ev-main-row" data-expand-target="' + rowId + '">' +
+      '<td style="text-align:center;"><span class="ev-expand-icon">▶</span></td>' +
+      '<td style="text-align:center; color:var(--text-dim);">' + g.os + '</td>' +
+      '<td style="font-weight:600;">' + g.network + '</td>' +
+      '<td style="text-align:right; font-family:monospace;">' + g.installs.toLocaleString() + '</td>' +
+      '<td style="text-align:right; font-family:monospace;">' + g.achieves.toLocaleString() + '</td>' +
+      '<td style="text-align:right; font-family:monospace; font-weight:600;">' + fmtPct(rate) + '</td>' +
+      '<td style="text-align:right; font-family:monospace; color:var(--accent); font-weight:600;">' + fmt$(g.cost) + '</td>' +
     '</tr>';
-  }).join('') || '<tr><td colspan="14" style="padding:40px; text-align:center; color:var(--text-faint);">필터 결과 없음</td></tr>';
+
+    // 드릴다운 상세 (기본 숨김)
+    html += '<tr class="ev-detail-row hidden" id="' + rowId + '"><td colspan="7">' +
+      '<div class="ev-detail-wrap">' +
+        '<table class="ev-detail-table">' +
+          '<thead><tr>' +
+            '<th>이벤트 조건</th>' +
+            '<th style="text-align:right;">인스톨</th>' +
+            '<th style="text-align:right;">달성</th>' +
+            '<th style="text-align:right;">달성률</th>' +
+            '<th style="text-align:right;">단가</th>' +
+            '<th style="text-align:right;">예상 비용</th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+          g.events.map(e => {
+            const evColor = e.mapped ? 'var(--text)' : 'var(--warn)';
+            return '<tr>' +
+              '<td style="color:' + evColor + ';">' + (e.eventCondition || '—') + 
+                (!e.mapped ? ' <span style="font-size:10px; color:var(--warn);">(단가 미매핑)</span>' : '') +
+              '</td>' +
+              '<td style="font-family:monospace;">' + e.installs.toLocaleString() + '</td>' +
+              '<td style="font-family:monospace;">' + e.achieves.toLocaleString() + '</td>' +
+              '<td style="font-family:monospace;">' + fmtPct(e.rate) + '</td>' +
+              '<td style="font-family:monospace;">' + (e.payout > 0 ? fmt$(e.payout) : '—') + '</td>' +
+              '<td style="font-family:monospace; color:var(--accent); font-weight:600;">' + (e.cost > 0 ? fmt$(e.cost) : '—') + '</td>' +
+            '</tr>';
+          }).join('') +
+          '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</td></tr>';
+  });
+
+  tbody.innerHTML = html || '<tr><td colspan="7" style="padding:40px; text-align:center; color:var(--text-faint);">데이터 없음</td></tr>';
+
+  // 펼침 이벤트
+  tbody.querySelectorAll('.ev-main-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const targetId = row.getAttribute('data-expand-target');
+      const detail = document.getElementById(targetId);
+      if (detail) {
+        detail.classList.toggle('hidden');
+        row.classList.toggle('expanded', !detail.classList.contains('hidden'));
+      }
+    });
+  });
 }
 
 function goToCalendarFromEvent() {
@@ -8027,16 +8066,58 @@ function loadSampleEventData() {
 // 업로드/필터 이벤트 바인딩
 function bindEventTabEvents() {
   const ev1 = document.getElementById('ev-upload-events');
-  const ev2 = document.getElementById('ev-upload-singular');
   if (ev1 && !ev1._bound) { ev1.addEventListener('change', onEventCsvChange); ev1._bound = true; }
-  if (ev2 && !ev2._bound) { ev2.addEventListener('change', onSingularCsvChange); ev2._bound = true; }
-  ['ev2-search', 'ev2-filter-profit', 'ev2-filter-mapped', 'ev2-filter-network'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el && !el._bound) {
-      el.addEventListener(id === 'ev2-search' ? 'input' : 'change', renderEventResults);
-      el._bound = true;
+
+  // 📂 드롭존 이벤트
+  const dropzone = document.getElementById('ev-dropzone');
+  const dropInner = document.getElementById('ev-dropzone-inner');
+  const dropLoaded = document.getElementById('ev-dropzone-loaded');
+  const uploadBtn = document.getElementById('ev-upload-btn');
+  const resetBtn = document.getElementById('ev-upload-reset');
+
+  if (dropzone && !dropzone._bound) {
+    dropzone._bound = true;
+
+    // 클릭 시 파일 선택
+    const triggerPick = (e) => {
+      e.stopPropagation();
+      if (ev1) ev1.click();
+    };
+    if (uploadBtn) uploadBtn.addEventListener('click', triggerPick);
+    dropInner && dropInner.addEventListener('click', triggerPick);
+
+    // 드래그 앤 드롭
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', (e) => {
+      if (e.target === dropzone) dropzone.classList.remove('dragover');
+    });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files && files[0] && ev1) {
+        // input에 파일 넣고 change 이벤트 트리거
+        const dt = new DataTransfer();
+        dt.items.add(files[0]);
+        ev1.files = dt.files;
+        ev1.dispatchEvent(new Event('change'));
+      }
+    });
+
+    // 리셋 버튼
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        if (ev1) ev1.value = '';
+        EVENT_STATE2.eventRows = [];
+        saveEventSession();
+        if (dropInner) dropInner.classList.remove('hidden');
+        if (dropLoaded) dropLoaded.classList.add('hidden');
+      });
     }
-  });
+  }
 }
 document.addEventListener('DOMContentLoaded', bindEventTabEvents);
 setTimeout(bindEventTabEvents, 500);
