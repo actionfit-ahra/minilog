@@ -1624,34 +1624,36 @@
 <!-- ========== 네트워크 ========== -->
 <section class="view" id="view-network">
   <h1 class="section-title">네트워크 <span class="accent">효율</span></h1>
-  <div class="section-desc">소스별 및 그룹별 집계</div>
+  <div class="section-desc">네트워크(소스)별 집계</div>
 
   <div class="chart-grid">
     <div class="chart-box">
-      <h3>그룹별 비용 비중</h3>
+      <h3>네트워크별 비용 비중</h3>
       <div class="chart-canvas-wrap"><canvas id="chart-group-split"></canvas></div>
     </div>
     <div class="chart-box">
-      <h3>그룹별 ROI D1</h3>
+      <h3>네트워크별 ROI (D1 / D3 / D7 / ACTUAL)</h3>
       <div class="chart-canvas-wrap"><canvas id="chart-group-roi"></canvas></div>
     </div>
   </div>
 
   <div class="panel">
     <div class="panel-header">
-      <div class="panel-title">그룹별 종합</div>
+      <div class="panel-title">네트워크별 종합</div>
     </div>
     <div class="table-wrap">
       <table id="tbl-group">
         <thead><tr>
+          <th>네트워크</th>
           <th>그룹</th>
-          <th class="num">소스수</th>
-          <th class="num">타이틀수</th>
           <th class="num">비용</th>
+          <th class="num">비중</th>
           <th class="num">인스톨</th>
           <th class="num">CPI</th>
           <th class="num">ROI D1</th>
+          <th class="num">ROI D3</th>
           <th class="num">ROI D7</th>
+          <th class="num">ROI ACTUAL</th>
           <th class="num">리텐션 D1</th>
           <th>등급</th>
         </tr></thead>
@@ -4277,9 +4279,9 @@ function renderOverview() {
     data: {
       labels: days.map(d => d.slice(5)),
       datasets: [
-        { label: '비용', data: costS, borderColor: C.warn, backgroundColor: C.warn + '20', borderWidth: 2, tension: 0.3, fill: false, pointRadius: 0, pointHoverRadius: 4 },
-        { label: 'D1 매출', data: rev1S, borderColor: C.accent, backgroundColor: C.accent + '20', borderWidth: 2, tension: 0.3, fill: false, pointRadius: 0, pointHoverRadius: 4 },
-        { label: 'D7 매출', data: rev7S, borderColor: C.good, backgroundColor: C.good + '20', borderWidth: 2, tension: 0.3, fill: true, pointRadius: 0, pointHoverRadius: 4 }
+        { label: '비용', data: costS, borderColor: C.warn, backgroundColor: C.warn + '20', borderWidth: 2, tension: 0.3, fill: false, pointRadius: 0, pointHoverRadius: 4, unit: '$', decimals: 0 },
+        { label: 'D1 매출', data: rev1S, borderColor: C.accent, backgroundColor: C.accent + '20', borderWidth: 2, tension: 0.3, fill: false, pointRadius: 0, pointHoverRadius: 4, unit: '$', decimals: 1 },
+        { label: 'D7 매출', data: rev7S, borderColor: C.good, backgroundColor: C.good + '20', borderWidth: 2, tension: 0.3, fill: true, pointRadius: 0, pointHoverRadius: 4, unit: '$', decimals: 1 }
       ]
     },
     options: chartOpts(C)
@@ -4299,15 +4301,30 @@ function renderOverview() {
     data: {
       labels: appArr.map(t => t.app.length > 16 ? t.app.slice(0,14)+'…' : t.app),
       datasets: [{
+        label: 'ROI D1',
         data: appArr.map(t => t.roi * 100),
         backgroundColor: appArr.map(t => chartRoiColor(C, t.roi)),
-        borderRadius: 2, maxBarThickness: 16
+        borderRadius: 2, maxBarThickness: 16,
+        unit: '%raw', decimals: 1
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       indexAxis: 'y',
-      plugins: { legend: { display: false } },
+      interaction: { mode: 'nearest', intersect: true },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.95)',
+          titleColor: '#fff', bodyColor: '#fff', padding: 10, cornerRadius: 6,
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.x;
+              return 'ROI D1: ' + v.toFixed(1) + '%';
+            }
+          }
+        }
+      },
       scales: {
         x: { ticks: { color: C.textDim, font: { size: 10 }, callback: v => v + '%' }, grid: { color: C.border } },
         y: { ticks: { color: C.text, font: { size: 10 } }, grid: { display: false } }
@@ -4433,10 +4450,46 @@ function renderOverview() {
   document.getElementById('overview-count').textContent = label;
 }
 
+// 데이터셋에 붙어있는 unit 힌트로 포맷팅 ('$' / '%' / '' 중 하나)
+function _fmtByUnit(val, unit, decimals) {
+  if (val === null || val === undefined || isNaN(val)) return '—';
+  const d = (typeof decimals === 'number') ? decimals : 1;
+  if (unit === '$') return '$' + (+val).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+  if (unit === '%') return (+val * 100).toFixed(d) + '%';
+  if (unit === '%raw') return (+val).toFixed(d) + '%';  // 이미 %인 값
+  if (unit === 'int') return Math.round(+val).toLocaleString();
+  return (+val).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+
 function chartOpts(C) {
   return {
     responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: C.text, font: { size: 11 } } } },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color: C.text, font: { size: 11 } } },
+      tooltip: {
+        enabled: true,
+        backgroundColor: 'rgba(17,24,39,0.95)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        padding: 10,
+        cornerRadius: 6,
+        titleFont: { size: 12, weight: 600 },
+        bodyFont: { size: 12 },
+        callbacks: {
+          label: function(ctx) {
+            const ds = ctx.dataset || {};
+            const unit = ds.unit || '';
+            const dec  = (typeof ds.decimals === 'number') ? ds.decimals : 1;
+            const val  = ctx.parsed && typeof ctx.parsed.y !== 'undefined' ? ctx.parsed.y : ctx.parsed;
+            const label = ds.label || '';
+            return (label ? label + ': ' : '') + _fmtByUnit(val, unit, dec);
+          }
+        }
+      }
+    },
     scales: {
       x: { ticks: { color: C.textDim, font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 }, grid: { color: C.border } },
       y: { ticks: { color: C.textDim, font: { size: 10 } }, grid: { color: C.border } }
@@ -4660,73 +4713,151 @@ function renderPerformance() {
   document.getElementById('perf-count').textContent = arr.length + '개 조합';
 }
 
-// ===== 네트워크 (그룹별 + 소스별) =====
+// ===== 네트워크 (소스별 상세) =====
 function renderNetwork() {
   if (!STATE.raw.length) return;
   const rows = getFilteredRows();
 
-  // 그룹별 집계
-  const byGroup = aggregateBy(rows, r => getGroup(r.Source));
-  const groupArr = [...byGroup.entries()].map(([g, v]) => {
-    const srcSet = new Set(v.rows.map(r => r.Source));
-    const titleSet = new Set(v.rows.map(r => r.App));
-    return { group: g, srcCount: srcSet.size, titleCount: titleSet.size,
-      cost: v.Cost, installs: v.Installs, cpi: v.Cost/(v.Installs||1),
-      roi1: v.Rev1d/(v.Cost||1), roi7: v.Rev7d/(v.Cost||1),
-      rt1: v.Ret1d/(v.Installs||1) };
-  }).sort((a,b) => b.cost - a.cost);
+  // 🔄 그룹이 아닌 네트워크(소스)별 집계
+  const bySource = aggregateBy(rows, r => r.Source);
+  const sourceArr = [...bySource.entries()].map(([src, v]) => ({
+    src,
+    group: getGroup(src),
+    cost: v.Cost,
+    installs: v.Installs,
+    cpi: v.Cost/(v.Installs||1),
+    roi1: v.Rev1d/(v.Cost||1),
+    roi3: v.Rev3d/(v.Cost||1),
+    roi7: v.Rev7d/(v.Cost||1),
+    roiA: v.RevActual/(v.Cost||1),
+    rev1: v.Rev1d, rev3: v.Rev3d, rev7: v.Rev7d, revA: v.RevActual,
+    rt1: v.Ret1d/(v.Installs||1)
+  })).filter(x => x.cost > 0 || x.installs > 0)
+    .sort((a,b) => b.cost - a.cost);
 
-  const totalCost = groupArr.reduce((a,b) => a + b.cost, 0);
+  // 비용 상위 12개만 차트 (너무 많으면 가독성 ↓)
+  const topN = sourceArr.slice(0, 12);
+  const totalCost = sourceArr.reduce((a,b) => a + b.cost, 0);
   const C = getChartColors();
-  const groupColors = { '오퍼월': C.accent, '리워드': C.good, '퍼포먼스': C.warn, '기타': C.textDim };
 
+  // 💡 chart-group-split: 비용 분포 (doughnut) — 네트워크별
   if (chartGroupSplit) chartGroupSplit.destroy();
+  const pieColors = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#6366f1','#14b8a6','#eab308','#ef4444'];
   chartGroupSplit = new Chart(document.getElementById('chart-group-split'), {
     type: 'doughnut',
     data: {
-      labels: groupArr.map(x => x.group),
-      datasets: [{ data: groupArr.map(x => x.cost), backgroundColor: groupArr.map(x => groupColors[x.group] || C.textDim), borderWidth: 0 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'right', labels: { color: C.text, font: { size: 11 }, boxWidth: 12, padding: 10 } } }
-    }
-  });
-
-  if (chartGroupRoi) chartGroupRoi.destroy();
-  chartGroupRoi = new Chart(document.getElementById('chart-group-roi'), {
-    type: 'bar',
-    data: {
-      labels: groupArr.map(x => x.group),
+      labels: topN.map(x => x.src),
       datasets: [{
-        data: groupArr.map(x => x.roi1 * 100),
-        backgroundColor: groupArr.map(x => chartRoiColor(C, x.roi1)),
-        borderRadius: 2, maxBarThickness: 60
+        label: '비용',
+        data: topN.map(x => x.cost),
+        backgroundColor: topN.map((_, i) => pieColors[i % pieColors.length]),
+        borderWidth: 0,
+        unit: '$', decimals: 0
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { position: 'right', labels: { color: C.text, font: { size: 10 }, boxWidth: 10, padding: 6 } },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.95)',
+          titleColor: '#fff', bodyColor: '#fff', padding: 10, cornerRadius: 6,
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed;
+              const pct = totalCost > 0 ? ((v / totalCost) * 100).toFixed(1) : '0.0';
+              return ctx.label + ': $' + Math.round(v).toLocaleString() + ' (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // 💡 chart-group-roi: 네트워크별 ROI D1/D3/D7/ACTUAL (막대 4개 + 선)
+  if (chartGroupRoi) chartGroupRoi.destroy();
+  chartGroupRoi = new Chart(document.getElementById('chart-group-roi'), {
+    type: 'bar',
+    data: {
+      labels: topN.map(x => x.src.length > 12 ? x.src.slice(0, 11) + '…' : x.src),
+      datasets: [
+        {
+          label: 'D1',
+          data: topN.map(x => x.roi1 * 100),
+          backgroundColor: C.accent + 'cc',
+          borderRadius: 2, maxBarThickness: 22,
+          unit: '%raw', decimals: 1,
+          order: 2
+        },
+        {
+          label: 'D3',
+          data: topN.map(x => x.roi3 * 100),
+          backgroundColor: C.warn + 'cc',
+          borderRadius: 2, maxBarThickness: 22,
+          unit: '%raw', decimals: 1,
+          order: 2
+        },
+        {
+          label: 'D7',
+          data: topN.map(x => x.roi7 * 100),
+          backgroundColor: C.good + 'cc',
+          borderRadius: 2, maxBarThickness: 22,
+          unit: '%raw', decimals: 1,
+          order: 2
+        },
+        {
+          label: 'ACTUAL',
+          type: 'line',
+          data: topN.map(x => x.roiA * 100),
+          borderColor: '#ef4444',
+          backgroundColor: '#ef4444',
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.2,
+          fill: false,
+          unit: '%raw', decimals: 1,
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: C.text, font: { size: 11 }, boxWidth: 12 } },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.95)',
+          titleColor: '#fff', bodyColor: '#fff', padding: 10, cornerRadius: 6,
+          callbacks: {
+            label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%'
+          }
+        }
+      },
       scales: {
-        x: { ticks: { color: C.text, font: { size: 11 } }, grid: { display: false } },
+        x: { ticks: { color: C.text, font: { size: 10 }, maxRotation: 45, minRotation: 30 }, grid: { display: false } },
         y: { ticks: { color: C.textDim, font: { size: 10 }, callback: v => v + '%' }, grid: { color: C.border } }
       }
     }
   });
 
+  // 🔄 tbl-group: 이제 네트워크별 표 (기존 "그룹별" → "네트워크별")
   const tb1 = document.querySelector('#tbl-group tbody');
-  tb1.innerHTML = groupArr.map(x => {
+  tb1.innerHTML = sourceArr.map(x => {
     const grade = x.roi1 >= 1 ? '<span class="badge good">A</span>' : x.roi1 >= 0.8 ? '<span class="badge good">B</span>' : x.roi1 >= 0.5 ? '<span class="badge warn">C</span>' : x.roi1 >= 0.3 ? '<span class="badge bad">D</span>' : '<span class="badge bad">F</span>';
+    const share = totalCost > 0 ? (x.cost / totalCost * 100).toFixed(1) : '0.0';
     return `<tr>
-      <td class="bold">${x.group}</td>
-      <td class="num">${x.srcCount}</td>
-      <td class="num">${x.titleCount}</td>
-      <td class="num">${USDp(x.cost)} <span style="color: var(--text-faint); font-size: 10px;">(${(x.cost/totalCost*100).toFixed(0)}%)</span></td>
+      <td class="bold">${x.src}</td>
+      <td><span class="badge neutral">${x.group}</span></td>
+      <td class="num">${USDp(x.cost)}</td>
+      <td class="num">${share}%</td>
       <td class="num">${NUM(x.installs)}</td>
       <td class="num">${USDp(x.cpi)}</td>
       <td class="num">${roiBadgeD1(x.roi1)}</td>
+      <td class="num">${roiBadgeD1(x.roi3)}</td>
       <td class="num">${roiBadgeD1(x.roi7)}</td>
-      <td class="num">${PCT(x.rt1,1)}</td>
+      <td class="num">${roiBadgeD1(x.roiA)}</td>
+      <td class="num">${PCT(x.rt1, 1)}</td>
       <td>${grade}</td>
     </tr>`;
   }).join('');
@@ -4794,12 +4925,20 @@ function renderCountry() {
         label: '비용',
         data: arr.map(x => x.cost),
         backgroundColor: countryColors,
-        borderRadius: 2, maxBarThickness: 60
+        borderRadius: 2, maxBarThickness: 60,
+        unit: '$', decimals: 0
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.95)',
+          titleColor: '#fff', bodyColor: '#fff', padding: 10, cornerRadius: 6,
+          callbacks: { label: ctx => '비용: $' + Math.round(ctx.parsed.y).toLocaleString() }
+        }
+      },
       scales: {
         x: { ticks: { color: C.text, font: { size: 12 } }, grid: { display: false } },
         y: { ticks: { color: C.textDim, font: { size: 10 }, callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(1)+'k' : v) }, grid: { color: C.border } }
@@ -4813,14 +4952,23 @@ function renderCountry() {
     data: {
       labels: arr.map(x => x.country),
       datasets: [{
+        label: 'ROI D1',
         data: arr.map(x => x.roi1 * 100),
         backgroundColor: arr.map(x => chartRoiColor(C, x.roi1)),
-        borderRadius: 2, maxBarThickness: 60
+        borderRadius: 2, maxBarThickness: 60,
+        unit: '%raw', decimals: 1
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.95)',
+          titleColor: '#fff', bodyColor: '#fff', padding: 10, cornerRadius: 6,
+          callbacks: { label: ctx => 'ROI D1: ' + ctx.parsed.y.toFixed(1) + '%' }
+        }
+      },
       scales: {
         x: { ticks: { color: C.text, font: { size: 12 } }, grid: { display: false } },
         y: { ticks: { color: C.textDim, font: { size: 10 }, callback: v => v + '%' }, grid: { color: C.border } }
@@ -5034,21 +5182,87 @@ function renderInsights() {
 function renderInsightTable() {
   const filter = document.getElementById('insight-filter')?.value || '';
   const list = (STATE._insights || []).filter(i => !filter || i.type === filter);
-  const html = list.slice(0, 30).map((i, idx) => {
-    const typeColor = { urgent: 'roi-red', opportunity: 'roi-green', warning: 'roi-yellow' }[i.type];
-    return `<tr>
-      <td class="num" style="color: var(--text-faint);">${idx + 1}</td>
-      <td><span class="badge ${typeColor}">${i.icon} ${i.category}</span></td>
-      <td class="bold" style="font-size: 12px;">${i.target}</td>
-      <td style="font-size: 12px; color: var(--text-dim);">${i.status}</td>
-      <td class="num">${USDp(i.cost)}</td>
-      <td class="num">${roiBadgeD1(i.roi)}</td>
-      <td style="font-size: 12px;">${i.action}</td>
-    </tr>`;
-  }).join('');
-  document.getElementById('insight-list').innerHTML = html || 
-    '<tr><td colspan="7" style="padding: 30px; text-align: center; color: var(--text-faint);">분석할 항목 없음</td></tr>';
-  document.getElementById('insight-count').textContent = list.length + '건';
+
+  // 🆕 타이틀별로 그룹핑
+  const byTitle = new Map();
+  list.forEach(i => {
+    // target에서 타이틀 추출: "App · Src · OS/Country" 또는 "App (전체)"
+    let title = (i.target || '').split(' · ')[0].replace(/\s*\(전체\)\s*$/, '').trim();
+    if (!title) title = '기타';
+    if (!byTitle.has(title)) byTitle.set(title, []);
+    byTitle.get(title).push(i);
+  });
+
+  // 우선순위: 타이틀 그룹 내 최고 priority 기준 정렬
+  const groupArr = [...byTitle.entries()].map(([title, items]) => ({
+    title,
+    items,
+    topPriority: Math.max(...items.map(x => x.priority || 0)),
+    counts: {
+      urgent: items.filter(x => x.type === 'urgent').length,
+      opportunity: items.filter(x => x.type === 'opportunity').length,
+      warning: items.filter(x => x.type === 'warning').length
+    }
+  })).sort((a, b) => b.topPriority - a.topPriority);
+
+  if (groupArr.length === 0) {
+    document.getElementById('insight-list').innerHTML = 
+      '<tr><td colspan="7" style="padding: 30px; text-align: center; color: var(--text-faint);">분석할 항목 없음</td></tr>';
+    document.getElementById('insight-count').textContent = '0건';
+    return;
+  }
+
+  let html = '';
+  groupArr.forEach((g, idx) => {
+    const titleKey = 'ins-' + idx;
+    const badges = [];
+    if (g.counts.urgent > 0)     badges.push('<span class="badge roi-red" style="margin-right:4px;">🩸 ' + g.counts.urgent + '</span>');
+    if (g.counts.opportunity > 0) badges.push('<span class="badge roi-green" style="margin-right:4px;">💰 ' + g.counts.opportunity + '</span>');
+    if (g.counts.warning > 0)    badges.push('<span class="badge roi-yellow" style="margin-right:4px;">⚠ ' + g.counts.warning + '</span>');
+
+    // 타이틀 헤더 행 (클릭 가능)
+    html += '<tr class="insight-title-row" data-action="toggleInsightGroup" data-args="\'' + titleKey + '\'" style="cursor:pointer; background:var(--bg-hover, rgba(0,0,0,0.02));">' +
+      '<td class="num" style="color: var(--text-faint);">' + (idx + 1) + '</td>' +
+      '<td colspan="2">' +
+        '<span style="font-weight:700; font-size:13px;">▶ ' + g.title + '</span>' +
+        '<span style="margin-left:10px; font-size:11px; color:var(--text-dim);">' + g.items.length + '건</span>' +
+      '</td>' +
+      '<td colspan="4">' + badges.join('') + '</td>' +
+      '</tr>';
+
+    // 상세 행 (기본 숨김)
+    g.items.forEach(i => {
+      const typeColor = { urgent: 'roi-red', opportunity: 'roi-green', warning: 'roi-yellow' }[i.type];
+      // target에서 네트워크/OS/국가 부분만 표시
+      const afterTitle = (i.target || '').split(' · ').slice(1).join(' · ') || '(전체)';
+      html += '<tr class="insight-detail-row" data-group="' + titleKey + '" style="display:none; background:var(--bg);">' +
+        '<td></td>' +
+        '<td><span class="badge ' + typeColor + '">' + i.icon + ' ' + i.category + '</span></td>' +
+        '<td style="font-size:12px; color:var(--text);">└ ' + afterTitle + '</td>' +
+        '<td style="font-size:12px; color:var(--text-dim);">' + i.status + '</td>' +
+        '<td class="num">' + USDp(i.cost) + '</td>' +
+        '<td class="num">' + roiBadgeD1(i.roi) + '</td>' +
+        '<td style="font-size:12px;">' + i.action + '</td>' +
+        '</tr>';
+    });
+  });
+
+  document.getElementById('insight-list').innerHTML = html;
+  document.getElementById('insight-count').textContent =
+    groupArr.length + '개 타이틀 · ' + list.length + '건';
+}
+
+// 그룹 토글
+function toggleInsightGroup(titleKey) {
+  const rows = document.querySelectorAll('.insight-detail-row[data-group="' + titleKey + '"]');
+  const titleRow = document.querySelector('.insight-title-row[data-args="\'' + titleKey + '\'"]');
+  if (!rows.length) return;
+  const isOpen = rows[0].style.display !== 'none';
+  rows.forEach(r => r.style.display = isOpen ? 'none' : '');
+  if (titleRow) {
+    const span = titleRow.querySelector('span');
+    if (span) span.textContent = (isOpen ? '▶ ' : '▼ ') + span.textContent.slice(2);
+  }
 }
 document.getElementById('insight-filter')?.addEventListener('change', renderInsightTable);
 
