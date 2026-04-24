@@ -6931,49 +6931,116 @@ function showLiveCampaignDetail(app) {
       '</div>';
     }).join('');
 
-    // 이력 테이블 - 컬럼별로 세부 내용 표시
-    // 어떤 컬럼에 데이터 있는지 체크
-    const colHas = {
-      event: s.rows.some(r => has(r.event)),
-      kpi: s.rows.some(r => has(r.kpi)),
-      budget: s.rows.some(r => has(r.budget)),
-      daily_cap: s.rows.some(r => has(r.daily_cap)),
-      campaign_name: s.rows.some(r => has(r.campaign_name)),
-      os_country: s.rows.some(r => has(r.os) || has(r.country))
-    };
+    // 이력 — 캠페인 단위로 그룹핑 (timestamp + campaign_name + action) → 클릭시 이벤트 펼침
+    const campGroups = new Map();
+    s.rows.forEach(c => {
+      const gKey = (c.timestamp || '') + '|' + (c.campaign_name || '') + '|' + (c.action || '');
+      if (!campGroups.has(gKey)) {
+        campGroups.set(gKey, {
+          timestamp: c.timestamp || '',
+          campaign_name: c.campaign_name || '',
+          action: c.action || '',
+          os: c.os || '',
+          country: c.country || '',
+          budget: c.budget || '',
+          daily_cap: c.daily_cap || '',
+          kpi: c.kpi || '',
+          events: []
+        });
+      }
+      const g = campGroups.get(gKey);
+      g.events.push({
+        event: c.event || '',
+        payout: c.payout || c.kpi || ''
+      });
+      // 필드 보완 (빈값만 채우기)
+      ['os','country','budget','daily_cap','kpi'].forEach(k => {
+        if (!g[k] && c[k]) g[k] = c[k];
+      });
+    });
 
-    const historyRows = s.rows.map(c => {
-      const ts = c.timestamp ? String(c.timestamp).replace(/T/, ' ').slice(0, 16) : '';
-      const actionBg = actionColor(c.action);
-      const actionBadge = '<span style="background:' + actionBg + '22; color:' + actionBg + '; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; white-space:nowrap;">' + esc(c.action || '—') + '</span>';
-      const evHl = has(c.event)
-        ? '<span style="color:' + getNetworkColor(s.net) + '; font-weight:700;">' + esc(c.event) + '</span>'
-        : '<span style="color:var(--text-faint);">—</span>';
-      const osC = [has(c.os) ? esc(c.os) : '', has(c.country) ? esc(c.country) : ''].filter(Boolean).join(' · ') || '—';
+    // 시간순 정렬 (최신↑)
+    const campArr = [...campGroups.values()].sort((a, b) =>
+      String(b.timestamp).localeCompare(String(a.timestamp))
+    );
 
-      const tds = [];
-      tds.push('<td style="padding:6px 10px; font-size:11px; white-space:nowrap; color:var(--text-dim);">' + ts + '</td>');
-      tds.push('<td style="padding:6px 10px;">' + actionBadge + '</td>');
-      if (colHas.event) tds.push('<td style="padding:6px 10px; font-size:11px;">' + evHl + '</td>');
-      if (colHas.kpi) tds.push('<td style="padding:6px 10px; font-size:11px;">' + (has(c.kpi) ? esc(c.kpi) : '—') + '</td>');
-      if (colHas.budget) tds.push('<td style="padding:6px 10px; font-size:11px;">' + (has(c.budget) ? esc(c.budget) : '—') + '</td>');
-      if (colHas.daily_cap) tds.push('<td style="padding:6px 10px; font-size:11px;">' + (has(c.daily_cap) ? esc(c.daily_cap) : '—') + '</td>');
-      if (colHas.os_country) tds.push('<td style="padding:6px 10px; font-size:10px; color:var(--text-dim);">' + osC + '</td>');
-      if (colHas.campaign_name) tds.push('<td style="padding:6px 10px; font-size:10px; font-family:monospace; color:var(--text-faint); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(c.campaign_name || '') + '">' + (has(c.campaign_name) ? esc(c.campaign_name) : '—') + '</td>');
+    // 고유 gid (DOM 식별용)
+    const gidBase = 'g-' + Math.random().toString(36).slice(2, 8);
 
-      return '<tr style="border-bottom:1px solid var(--border);">' + tds.join('') + '</tr>';
+    const historyRows = campArr.map((g, i) => {
+      const ts = g.timestamp ? String(g.timestamp).replace(/T/, ' ').slice(0, 16) : '';
+      const actionBg = actionColor(g.action);
+      const actionBadge = '<span style="background:' + actionBg + '22; color:' + actionBg + '; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; white-space:nowrap;">' + esc(g.action || '—') + '</span>';
+      const isMulti = g.events.length > 1;
+      const evCountBadge = isMulti
+        ? '<span style="background:#8b5cf622; color:#8b5cf6; padding:1px 6px; border-radius:4px; font-size:9px; font-weight:600; margin-left:4px;">멀티 ' + g.events.length + '</span>'
+        : (g.events.length === 1 && g.events[0].event
+            ? '<span style="background:#3b82f622; color:#3b82f6; padding:1px 6px; border-radius:4px; font-size:9px; font-weight:600; margin-left:4px;">싱글</span>'
+            : '');
+
+      const detailId = gidBase + '-d-' + i;
+      const netColor = getNetworkColor(s.net);
+
+      // 상세 펼침 내용
+      const metaBits = [];
+      if (has(g.os)) metaBits.push('<span style="background:#64748b22; color:#475569; padding:2px 8px; border-radius:4px; font-size:11px;">OS ' + esc(g.os) + '</span>');
+      if (has(g.country)) metaBits.push('<span style="background:#64748b22; color:#475569; padding:2px 8px; border-radius:4px; font-size:11px;">국가 ' + esc(g.country) + '</span>');
+      if (has(g.budget)) metaBits.push('<span style="background:#6366f122; color:#6366f1; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">예산 ' + esc(g.budget) + '</span>');
+      if (has(g.daily_cap)) metaBits.push('<span style="background:#f59e0b22; color:#d97706; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">캡 ' + esc(g.daily_cap) + '</span>');
+      if (has(g.kpi)) metaBits.push('<span style="background:#10b98122; color:#10b981; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">KPI ' + esc(g.kpi) + '</span>');
+
+      let eventsHtml = '';
+      if (g.events.length > 0 && g.events.some(e => e.event)) {
+        if (isMulti) {
+          // 멀티: 이벤트별 리스트 (조건 + 단가)
+          eventsHtml = '<div style="margin-top:10px;">' +
+            '<div style="font-size:10px; color:var(--text-dim); margin-bottom:6px; font-weight:600;">이벤트 목록</div>' +
+            '<table style="width:100%; border-collapse:collapse; background:var(--bg-card); border-radius:4px; overflow:hidden;">' +
+              g.events.map(ev =>
+                '<tr style="border-bottom:1px solid var(--border);">' +
+                  '<td style="padding:6px 10px; font-size:12px; color:' + netColor + '; font-weight:600;">' +
+                    (ev.event ? '🎯 ' + esc(ev.event) : '—') +
+                  '</td>' +
+                  '<td style="padding:6px 10px; text-align:right; font-size:12px; font-family:monospace; font-weight:600;">' +
+                    (ev.payout ? esc(ev.payout) : '<span style="color:var(--text-faint);">—</span>') +
+                  '</td>' +
+                '</tr>'
+              ).join('') +
+            '</table>' +
+          '</div>';
+        } else {
+          // 싱글: 이벤트 1개 카드로
+          const ev = g.events[0];
+          eventsHtml = '<div style="margin-top:10px; display:flex; gap:10px; align-items:center;">' +
+            '<span style="font-size:10px; color:var(--text-dim);">이벤트 조건</span>' +
+            '<span style="font-size:13px; color:' + netColor + '; font-weight:700;">' +
+              (ev.event ? esc(ev.event) : '—') +
+            '</span>' +
+            (ev.payout ? '<span style="font-size:11px; font-family:monospace; color:var(--text-dim);">· 단가 ' + esc(ev.payout) + '</span>' : '') +
+          '</div>';
+        }
+      }
+
+      const detailContent = (metaBits.length || eventsHtml) ?
+        '<div style="padding:12px 14px; background:var(--bg); border-top:1px solid var(--border);">' +
+          (metaBits.length ? '<div style="display:flex; flex-wrap:wrap; gap:6px;">' + metaBits.join('') + '</div>' : '') +
+          eventsHtml +
+        '</div>'
+        : '<div style="padding:12px 14px; color:var(--text-faint); font-size:11px;">상세 정보 없음</div>';
+
+      return '<div style="border-bottom:1px solid var(--border); background:var(--bg-card);">' +
+        '<div class="camp-hist-header" data-detail-id="' + detailId + '" style="padding:10px 14px; display:flex; gap:12px; align-items:center; cursor:pointer; transition:background 0.1s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">' +
+          '<span class="camp-hist-arrow" style="color:var(--text-dim); font-size:11px; transition:transform 0.15s; display:inline-block; width:14px;">▶</span>' +
+          '<span style="font-size:11px; color:var(--text-dim); font-family:monospace; min-width:100px;">' + ts + '</span>' +
+          actionBadge +
+          '<span style="font-size:11px; font-family:monospace; color:var(--text); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(g.campaign_name) + '">' +
+            (has(g.campaign_name) ? esc(g.campaign_name) : '—') +
+          '</span>' +
+          evCountBadge +
+        '</div>' +
+        '<div id="' + detailId + '" class="camp-hist-detail hidden">' + detailContent + '</div>' +
+      '</div>';
     }).join('');
-
-    // 헤더도 동적으로
-    const ths = [];
-    ths.push('<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim); width:120px;">시간</th>');
-    ths.push('<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim); width:90px;">액션</th>');
-    if (colHas.event) ths.push('<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim);">이벤트 조건</th>');
-    if (colHas.kpi) ths.push('<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim);">KPI / 단가</th>');
-    if (colHas.budget) ths.push('<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim);">예산</th>');
-    if (colHas.daily_cap) ths.push('<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim);">데일리 캡</th>');
-    if (colHas.os_country) ths.push('<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim);">OS/국가</th>');
-    if (colHas.campaign_name) ths.push('<th style="padding:6px 10px; text-align:left; font-size:10px; font-weight:600; color:var(--text-dim);">캠페인명</th>');
 
     const statusBadge = s.latest.action === '종료'
       ? '<span style="background:#94a3b822; color:#64748b; padding:2px 10px; border-radius:12px; font-size:10px; font-weight:600;">종료</span>'
@@ -6987,15 +7054,12 @@ function showLiveCampaignDetail(app) {
       '<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">' +
         '<h4 style="margin:0; font-size:15px; font-weight:700; color:' + getNetworkColor(s.net) + ';">' + esc(s.net) + '</h4>' +
         statusBadge + tagBadge +
-        '<span style="margin-left:auto; font-size:11px; color:var(--text-dim);">' + s.rows.length + '건 이력</span>' +
+        '<span style="margin-left:auto; font-size:11px; color:var(--text-dim);">' + campArr.length + '건 캠페인 이력</span>' +
       '</div>' +
       (curItems.length ? '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; margin-bottom:12px;">' + curCards + '</div>' : '') +
-      '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; margin-top:8px;">' +
-        '<thead><tr style="background:var(--bg-card); border-bottom:1px solid var(--border);">' +
-          ths.join('') +
-        '</tr></thead>' +
-        '<tbody>' + historyRows + '</tbody>' +
-      '</table></div>' +
+      '<div style="border:1px solid var(--border); border-radius:6px; overflow:hidden;">' +
+        historyRows +
+      '</div>' +
     '</div>';
   }).join('');
 
@@ -7303,6 +7367,25 @@ function openLiveCampaignModal(html) {
     <button data-action="closeLiveCampaignModal" style="position:absolute; top:12px; right:12px; background:var(--bg-hover, #f3f4f6); border:1px solid var(--border); font-size:16px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; z-index:2;">✕</button>
     ${html}
   </div>`;
+
+  // 🎯 캠페인 이력 행 클릭 → 상세 펼침 (아코디언)
+  modal.querySelectorAll('.camp-hist-header').forEach(header => {
+    header.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const detailId = header.getAttribute('data-detail-id');
+      const detail = document.getElementById(detailId);
+      const arrow = header.querySelector('.camp-hist-arrow');
+      if (!detail) return;
+      const isOpen = !detail.classList.contains('hidden');
+      if (isOpen) {
+        detail.classList.add('hidden');
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+      } else {
+        detail.classList.remove('hidden');
+        if (arrow) arrow.style.transform = 'rotate(90deg)';
+      }
+    });
+  });
 }
 
 function closeLiveCampaignModal() {
