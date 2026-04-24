@@ -3113,11 +3113,10 @@ function updatePeriodRangeDisplay() {
   const labelEl = document.getElementById('gf-period-label');
   const btnEl = document.getElementById('gf-period-btn');
   if (!el) return;
-  if (!STATE.today) { el.textContent = ''; return; }
 
   const f = STATE.filter || {};
 
-  // ⭐ Custom 모드
+  // ⭐ Custom 모드 — STATE.today 여부와 무관하게 적용 (데이터 로드 전에도 동작)
   if (f.dateStart && f.dateEnd) {
     const s = new Date(f.dateStart);
     const e = new Date(f.dateEnd);
@@ -3127,6 +3126,8 @@ function updatePeriodRangeDisplay() {
     if (btnEl) btnEl.classList.add('has-filter');
     return;
   }
+
+  if (!STATE.today) { el.textContent = ''; return; }
 
   const days = f.days || 14;
   if (days >= 9999) {
