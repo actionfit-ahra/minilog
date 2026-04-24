@@ -3127,23 +3127,31 @@ function updatePeriodRangeDisplay() {
     return;
   }
 
-  if (!STATE.today) { el.textContent = ''; return; }
-
+  // 프리셋 라벨은 STATE.today 없어도 즉시 표시 (기간 텍스트만 생략)
   const days = f.days || 14;
   if (days >= 9999) {
-    // 전체: 로우데이터의 최소/최대 날짜
-    const dates = (STATE.raw || []).map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
-    if (dates.length) el.textContent = '📅 ' + dates[0] + ' ~ ' + dates[dates.length - 1] + ' (전체)';
-    else el.textContent = '';
+    if (STATE.today) {
+      const dates = (STATE.raw || []).map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
+      if (dates.length) el.textContent = '📅 ' + dates[0] + ' ~ ' + dates[dates.length - 1] + ' (전체)';
+      else el.textContent = '';
+    } else {
+      el.textContent = '';
+    }
     if (labelEl) labelEl.textContent = '전체 기간';
     if (btnEl) btnEl.classList.add('has-filter');
     return;
   }
-  const end = STATE.today;
-  const start = new Date(end);
-  start.setDate(start.getDate() - (days - 1));
-  const fmt = d => d.toISOString().slice(0, 10);
-  el.textContent = '📅 ' + fmt(start) + ' ~ ' + fmt(end) + ' (' + days + '일)';
+
+  // 일수 프리셋 (3, 7, 14, 30, 60, 90)
+  if (STATE.today) {
+    const end = STATE.today;
+    const start = new Date(end);
+    start.setDate(start.getDate() - (days - 1));
+    const fmt = d => d.toISOString().slice(0, 10);
+    el.textContent = '📅 ' + fmt(start) + ' ~ ' + fmt(end) + ' (' + days + '일)';
+  } else {
+    el.textContent = '';
+  }
   if (labelEl) labelEl.textContent = '최근 ' + days + '일';
   if (btnEl) btnEl.classList.toggle('has-filter', days !== 14);
 }
@@ -3402,19 +3410,41 @@ function setupGlobalFilter() {
       if (target.closest('#gf-date-end-box')) { CAL.selecting = 'end'; renderCalendars(); return; }
     });
 
-    // 프리셋 클릭
+    // 프리셋 클릭 — 달력에 범위 표시 후 즉시 적용
     presets.forEach(p => {
       p.addEventListener('click', () => {
         const val = p.getAttribute('data-preset');
         presets.forEach(x => x.classList.remove('active'));
         p.classList.add('active');
         if (val === 'custom') return;
-        // 프리셋 선택 → 즉시 적용
+
+        // 프리셋 → 날짜 범위 계산해서 CAL.tmpStart/tmpEnd 세팅 (달력 시각 표시용)
+        const days = +val;
+        if (days >= 9999) {
+          // 전체: 데이터 min~max
+          if (CAL.min && CAL.max) {
+            CAL.tmpStart = CAL.min;
+            CAL.tmpEnd = CAL.max;
+          }
+        } else {
+          const end = STATE.today || (CAL.max ? new Date(CAL.max) : new Date());
+          const endDate = end instanceof Date ? end : new Date(end);
+          const start = new Date(endDate);
+          start.setDate(start.getDate() - (days - 1));
+          CAL.tmpStart = fmtYMD(start);
+          CAL.tmpEnd = fmtYMD(endDate);
+          // 좌측 달을 start 월로 이동
+          CAL.leftMonth = new Date(start.getFullYear(), start.getMonth(), 1);
+        }
+        renderCalendars();
+
+        // 즉시 적용
         STATE.filter.dateStart = null;
         STATE.filter.dateEnd = null;
-        STATE.filter.days = +val;
+        STATE.filter.days = days;
         updatePeriodRangeDisplay();
-        closePopover();
+        // 팝업 유지하되 0.4초 후 자동 닫기 (범위 시각 피드백 보여주기 위해)
+        setTimeout(() => closePopover(), 400);
         if (STATE.raw.length) invalidateRenderCache();
       });
     });
