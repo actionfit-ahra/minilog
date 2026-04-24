@@ -267,6 +267,193 @@
     color: var(--accent);
     font-weight: 600;
   }
+
+  /* 📅 기간 날짜 범위 버튼 + 팝오버 */
+  .gf-period-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    min-width: 130px;
+    text-align: left;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.12s;
+  }
+  .gf-period-btn:hover { border-color: var(--border-strong); background: var(--bg-hover); }
+  .gf-period-btn.has-filter {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .gf-popover {
+    position: absolute;
+    z-index: 100;
+    margin-top: 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  }
+  .gf-popover-body {
+    display: flex;
+    min-width: 480px;
+  }
+  .gf-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px;
+    border-right: 1px solid var(--border);
+    min-width: 130px;
+  }
+  .gf-presets > div {
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .gf-presets > div:hover { background: var(--accent-soft); }
+  .gf-presets > div.active {
+    background: var(--accent);
+    color: #fff;
+  }
+  .gf-cal-wrap {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+    min-width: 540px;
+  }
+  .gf-cal-inputs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .gf-cal-date-box {
+    flex: 1;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 5px;
+    padding: 7px 10px;
+    font-size: 12px;
+    color: var(--text);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-weight: 500;
+  }
+  .gf-cal-date-box.active { border-color: var(--accent); }
+  .gf-cal-months {
+    display: flex;
+    gap: 14px;
+  }
+  .gf-cal-month {
+    flex: 1;
+    min-width: 240px;
+  }
+  .gf-cal-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    padding: 0 4px;
+  }
+  .gf-cal-nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .gf-cal-nav-btn:hover { background: var(--bg-hover); }
+  .gf-cal-nav-btn.disabled { color: var(--text-faint); cursor: not-allowed; }
+  .gf-cal-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .gf-cal-grid {
+    display: grid;
+    grid-template-columns: 20px repeat(7, 1fr);
+    gap: 2px;
+  }
+  .gf-cal-week {
+    font-size: 9px;
+    color: var(--text-faint);
+    text-align: center;
+    padding: 4px 0;
+    font-weight: 600;
+  }
+  .gf-cal-dow {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 5px 0;
+    font-weight: 600;
+  }
+  .gf-cal-day {
+    aspect-ratio: 1;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--text);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.1s;
+  }
+  .gf-cal-day:hover { background: var(--accent-soft); }
+  .gf-cal-day.other { color: var(--text-faint); }
+  .gf-cal-day.disabled {
+    color: var(--text-faint);
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  .gf-cal-day.disabled:hover { background: transparent; }
+  .gf-cal-day.in-range {
+    background: var(--accent-soft);
+    border-radius: 0;
+  }
+  .gf-cal-day.range-start { border-radius: 4px 0 0 4px; }
+  .gf-cal-day.range-end { border-radius: 0 4px 4px 0; }
+  .gf-cal-day.range-start.range-end { border-radius: 4px; }
+  .gf-cal-day.selected {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .gf-cal-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-start;
+    margin-top: 6px;
+  }
+  @media (max-width: 768px) {
+    .gf-popover-body { min-width: 320px; flex-direction: column; }
+    .gf-presets {
+      flex-direction: row;
+      flex-wrap: wrap;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .gf-cal-wrap { min-width: 320px; }
+    .gf-cal-months { flex-direction: column; gap: 8px; }
+    .gf-cal-month { min-width: 0; }
+  }
   /* 비교 모드 토글 */
   .gf-toggle {
     display: inline-flex;
@@ -1338,17 +1525,47 @@
   <!-- 전역 필터 (sticky) -->
   <div class="global-filter" id="global-filter-bar">
     <label class="gf-label">기간</label>
-    <select id="gf-period" class="gf-select">
-      <option value="1">오늘</option>
-      <option value="3">최근 3일</option>
-      <option value="7">최근 7일</option>
-      <option value="14" selected>최근 14일</option>
-      <option value="30">최근 30일 (월)</option>
-      <option value="60">최근 60일</option>
-      <option value="90">최근 90일 (분기)</option>
-      <option value="9999">전체 기간</option>
-    </select>
+    <button id="gf-period-btn" class="gf-period-btn">
+      <span id="gf-period-label">최근 14일</span>
+      <span style="margin-left:6px; color:var(--text-dim);">▾</span>
+    </button>
     <span id="gf-period-range" style="font-size:11px; color:var(--text-dim); padding:0 8px; align-self:center; white-space:nowrap;"></span>
+
+    <!-- 팝오버 — 2개월 캘린더 -->
+    <div id="gf-period-popover" class="gf-popover" style="display:none;">
+      <div class="gf-popover-body">
+        <div class="gf-presets">
+          <div data-preset="1">오늘</div>
+          <div data-preset="3">최근 3일</div>
+          <div data-preset="7">최근 7일</div>
+          <div data-preset="14">최근 14일</div>
+          <div data-preset="30">최근 30일</div>
+          <div data-preset="60">최근 60일</div>
+          <div data-preset="90">최근 90일</div>
+          <div data-preset="9999">전체 기간</div>
+          <div data-preset="custom" class="active">Custom</div>
+        </div>
+        <div class="gf-cal-wrap">
+          <div class="gf-cal-inputs">
+            <div class="gf-cal-date-box" id="gf-date-start-box">
+              <span>📅</span><span id="gf-date-start-text">—</span>
+            </div>
+            <div class="gf-cal-date-box" id="gf-date-end-box">
+              <span>📅</span><span id="gf-date-end-text">—</span>
+            </div>
+          </div>
+          <div class="gf-cal-months">
+            <div class="gf-cal-month" id="gf-cal-left"></div>
+            <div class="gf-cal-month" id="gf-cal-right"></div>
+          </div>
+          <div class="gf-cal-actions">
+            <button id="gf-date-apply" class="btn primary sm">Apply</button>
+            <button id="gf-date-cancel" class="btn sm">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <label class="gf-label">OS</label>
     <select id="gf-os" class="gf-select">
       <option value="">전체</option>
@@ -2509,6 +2726,8 @@ const STATE = {
   theme: 'light',
   filter: {
     days: 14,
+    dateStart: null,    // 'YYYY-MM-DD' 커스텀 시작
+    dateEnd: null,      // 'YYYY-MM-DD' 커스텀 끝
     os: '',
     country: '',
     network: '',
@@ -2629,6 +2848,17 @@ function roiColor(roi) {
 
 // ===== 필터 =====
 function periodFilter(rows, days) {
+  // ⭐ Custom 날짜 범위 우선
+  const f = STATE.filter;
+  if (f.dateStart && f.dateEnd) {
+    const start = new Date(f.dateStart);
+    const end = new Date(f.dateEnd);
+    end.setHours(23, 59, 59, 999);
+    return rows.filter(r => {
+      const d = new Date(r.Date);
+      return d >= start && d <= end;
+    });
+  }
   if (!STATE.today) return rows;
   if (days >= 9999) return rows; // 전체 기간
   const cutoff = new Date(STATE.today);
@@ -2641,6 +2871,20 @@ function periodFilter(rows, days) {
 
 // 이전 기간 필터 (비교용) — 현재 기간 바로 직전 같은 길이
 function prevPeriodFilter(rows, days) {
+  const f = STATE.filter;
+  if (f.dateStart && f.dateEnd) {
+    // Custom 모드: 같은 길이만큼 이전
+    const start = new Date(f.dateStart);
+    const end = new Date(f.dateEnd);
+    const lengthMs = end - start;
+    const prevEnd = new Date(start.getTime() - 86400000);
+    const prevStart = new Date(prevEnd.getTime() - lengthMs);
+    prevEnd.setHours(23, 59, 59, 999);
+    return rows.filter(r => {
+      const d = new Date(r.Date);
+      return d >= prevStart && d <= prevEnd;
+    });
+  }
   if (!STATE.today) return rows;
   if (days >= 9999) return []; // 전체 기간 선택 시 비교 없음
   const endPrev = new Date(STATE.today);
@@ -2653,9 +2897,28 @@ function prevPeriodFilter(rows, days) {
   });
 }
 
+// 📅 현재 기간 라벨 (팝업/KPI에서 재사용)
+function periodLabel() {
+  const f = STATE.filter || {};
+  if (f.dateStart && f.dateEnd) {
+    const span = Math.round((new Date(f.dateEnd) - new Date(f.dateStart)) / 86400000) + 1;
+    return span + '일 (' + f.dateStart.slice(5) + '~' + f.dateEnd.slice(5) + ')';
+  }
+  if ((f.days || 14) >= 9999) return '전체';
+  return (f.days || 14) + '일';
+}
+
 // "일 평균" 계산 시 실제 데이터 포함된 일수
 function effectiveDays() {
-  if (STATE.filter.days < 9999) return STATE.filter.days;
+  const f = STATE.filter;
+  // Custom 날짜 범위
+  if (f.dateStart && f.dateEnd) {
+    const s = new Date(f.dateStart);
+    const e = new Date(f.dateEnd);
+    const span = Math.round((e - s) / 86400000) + 1;
+    return Math.max(1, span);
+  }
+  if (f.days < 9999) return f.days;
   // 전체 기간일 땐 실제 데이터 범위 일수
   if (!STATE.raw.length) return 1;
   const dates = STATE.raw.map(r => new Date(r.Date).getTime()).filter(d => !isNaN(d));
@@ -2846,14 +3109,32 @@ document.querySelectorAll('.slack-tab').forEach(t => {
 // 기간 선택 옆 날짜 범위 표시 갱신
 function updatePeriodRangeDisplay() {
   const el = document.getElementById('gf-period-range');
+  const labelEl = document.getElementById('gf-period-label');
+  const btnEl = document.getElementById('gf-period-btn');
   if (!el) return;
   if (!STATE.today) { el.textContent = ''; return; }
-  const days = STATE.filter?.days || 14;
+
+  const f = STATE.filter || {};
+
+  // ⭐ Custom 모드
+  if (f.dateStart && f.dateEnd) {
+    const s = new Date(f.dateStart);
+    const e = new Date(f.dateEnd);
+    const span = Math.round((e - s) / 86400000) + 1;
+    el.textContent = '📅 ' + f.dateStart + ' ~ ' + f.dateEnd + ' (' + span + '일)';
+    if (labelEl) labelEl.textContent = span + '일 (Custom)';
+    if (btnEl) btnEl.classList.add('has-filter');
+    return;
+  }
+
+  const days = f.days || 14;
   if (days >= 9999) {
     // 전체: 로우데이터의 최소/최대 날짜
     const dates = (STATE.raw || []).map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
     if (dates.length) el.textContent = '📅 ' + dates[0] + ' ~ ' + dates[dates.length - 1] + ' (전체)';
     else el.textContent = '';
+    if (labelEl) labelEl.textContent = '전체 기간';
+    if (btnEl) btnEl.classList.add('has-filter');
     return;
   }
   const end = STATE.today;
@@ -2861,28 +3142,27 @@ function updatePeriodRangeDisplay() {
   start.setDate(start.getDate() - (days - 1));
   const fmt = d => d.toISOString().slice(0, 10);
   el.textContent = '📅 ' + fmt(start) + ' ~ ' + fmt(end) + ' (' + days + '일)';
+  if (labelEl) labelEl.textContent = '최근 ' + days + '일';
+  if (btnEl) btnEl.classList.toggle('has-filter', days !== 14);
 }
 
 // ===== 전역 필터 바 (드롭다운) =====
 function setupGlobalFilter() {
-  const ids = ['gf-period', 'gf-os', 'gf-country', 'gf-network', 'gf-title'];
+  const ids = ['gf-os', 'gf-country', 'gf-network', 'gf-title'];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('change', () => {
       const v = el.value;
-      if (id === 'gf-period') STATE.filter.days = +v;
-      else if (id === 'gf-os') STATE.filter.os = v;
+      if (id === 'gf-os') STATE.filter.os = v;
       else if (id === 'gf-country') STATE.filter.country = v;
       else if (id === 'gf-network') STATE.filter.network = v;
       else if (id === 'gf-title') STATE.filter.title = v;
-      // has-filter 클래스 토글 (전체 아닐 때 강조)
-      if (id === 'gf-period') el.classList.toggle('has-filter', +v !== 14);
-      else el.classList.toggle('has-filter', v !== '');
-      if (id === 'gf-period') updatePeriodRangeDisplay();
+      el.classList.toggle('has-filter', v !== '');
       if (STATE.raw.length) invalidateRenderCache();
     });
   });
+
   // 비교 모드 토글
   const cmp = document.getElementById('gf-compare');
   if (cmp) {
@@ -2890,6 +3170,263 @@ function setupGlobalFilter() {
       STATE.filter.compare = cmp.checked;
       if (STATE.raw.length) invalidateRenderCache();
     });
+  }
+
+  // 📅 기간 팝오버 — 2개월 캘린더
+  const btn = document.getElementById('gf-period-btn');
+  const pop = document.getElementById('gf-period-popover');
+  const presets = document.querySelectorAll('.gf-presets > div');
+  const startText = document.getElementById('gf-date-start-text');
+  const endText = document.getElementById('gf-date-end-text');
+  const startBox = document.getElementById('gf-date-start-box');
+  const endBox = document.getElementById('gf-date-end-box');
+  const calLeft = document.getElementById('gf-cal-left');
+  const calRight = document.getElementById('gf-cal-right');
+  const dateCancel = document.getElementById('gf-date-cancel');
+  const dateApply = document.getElementById('gf-date-apply');
+
+  // 달력 상태
+  const CAL = {
+    leftMonth: null,     // Date (1일 기준)
+    tmpStart: null,      // 선택 진행 중 start 'YYYY-MM-DD'
+    tmpEnd: null,        // 선택 진행 중 end
+    selecting: 'start',  // 'start' 또는 'end'
+    min: null,           // 'YYYY-MM-DD' 제한
+    max: null
+  };
+
+  function fmtYMD(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + dd;
+  }
+
+  // ISO 주차 계산
+  function isoWeek(d) {
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = t.getUTCDay() || 7;
+    t.setUTCDate(t.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return Math.ceil((((t - yearStart) / 86400000) + 1) / 7);
+  }
+
+  // 한 달 렌더
+  function renderMonth(container, monthDate, isRight) {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // 이 월의 1일의 요일 (월요일=0)
+    const firstDay = new Date(year, month, 1);
+    let startDow = firstDay.getDay() - 1;  // 0=Mon
+    if (startDow < 0) startDow = 6;  // Sun → 6
+
+    // 이전 달 끝 며칠 채우기
+    const lastDayPrev = new Date(year, month, 0).getDate();
+    // 이 달 마지막 날
+    const lastDay = new Date(year, month + 1, 0).getDate();
+
+    const cells = [];
+    // 이전 달
+    for (let i = startDow - 1; i >= 0; i--) {
+      cells.push({ date: new Date(year, month - 1, lastDayPrev - i), other: true });
+    }
+    // 이번 달
+    for (let d = 1; d <= lastDay; d++) {
+      cells.push({ date: new Date(year, month, d), other: false });
+    }
+    // 다음 달 채우기 (42칸까지)
+    let nextD = 1;
+    while (cells.length < 42) {
+      cells.push({ date: new Date(year, month + 1, nextD++), other: true });
+    }
+
+    const navHtml = isRight
+      ? '<div class="gf-cal-nav"><span class="gf-cal-title">' + monthNames[month] + ' ' + year + '</span>' +
+        '<button class="gf-cal-nav-btn" data-nav="next">›</button></div>'
+      : '<div class="gf-cal-nav"><button class="gf-cal-nav-btn" data-nav="prev">‹</button>' +
+        '<span class="gf-cal-title">' + monthNames[month] + ' ' + year + '</span><span></span></div>';
+
+    let html = navHtml;
+    html += '<div class="gf-cal-grid">';
+    html += '<div class="gf-cal-dow">W</div>';
+    ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach(d => { html += '<div class="gf-cal-dow">' + d + '</div>'; });
+
+    // 7개씩 주차로 묶어서 출력
+    for (let w = 0; w < 6; w++) {
+      const weekCells = cells.slice(w * 7, w * 7 + 7);
+      // 주차 표시 (첫 번째 셀 기준)
+      html += '<div class="gf-cal-week">' + isoWeek(weekCells[0].date) + '</div>';
+      weekCells.forEach(cell => {
+        const ymd = fmtYMD(cell.date);
+        let cls = 'gf-cal-day';
+        if (cell.other) cls += ' other';
+        // 범위 제한
+        if ((CAL.min && ymd < CAL.min) || (CAL.max && ymd > CAL.max)) {
+          cls += ' disabled';
+        } else {
+          // 선택 범위 내
+          if (CAL.tmpStart && CAL.tmpEnd) {
+            if (ymd >= CAL.tmpStart && ymd <= CAL.tmpEnd) cls += ' in-range';
+            if (ymd === CAL.tmpStart) cls += ' range-start selected';
+            if (ymd === CAL.tmpEnd) cls += ' range-end selected';
+          } else if (CAL.tmpStart && ymd === CAL.tmpStart) {
+            cls += ' selected';
+          }
+        }
+        html += '<div class="' + cls + '" data-ymd="' + ymd + '">' + cell.date.getDate() + '</div>';
+      });
+    }
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  function renderCalendars() {
+    if (!CAL.leftMonth) return;
+    const rightMonth = new Date(CAL.leftMonth.getFullYear(), CAL.leftMonth.getMonth() + 1, 1);
+    renderMonth(calLeft, CAL.leftMonth, false);
+    renderMonth(calRight, rightMonth, true);
+
+    // 텍스트 업데이트
+    if (startText) startText.textContent = CAL.tmpStart || '—';
+    if (endText) endText.textContent = CAL.tmpEnd || '—';
+    // 활성 박스 표시
+    if (startBox) startBox.classList.toggle('active', CAL.selecting === 'start');
+    if (endBox) endBox.classList.toggle('active', CAL.selecting === 'end');
+  }
+
+  function openPopover() {
+    pop.style.display = 'block';
+    // 위치
+    const rect = btn.getBoundingClientRect();
+    pop.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+    pop.style.left = (rect.left + window.scrollX) + 'px';
+
+    // 데이터 범위 감지
+    if (STATE.raw.length) {
+      const dates = STATE.raw.map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
+      if (dates.length) {
+        CAL.min = dates[0];
+        CAL.max = dates[dates.length - 1];
+      }
+    }
+
+    // 현재 필터값 반영
+    CAL.tmpStart = STATE.filter.dateStart || null;
+    CAL.tmpEnd = STATE.filter.dateEnd || null;
+    CAL.selecting = 'start';
+
+    // 좌측 달 기준: tmpEnd가 있으면 그 월 -1 (2개월이 범위 커버)
+    let baseDate;
+    if (CAL.tmpEnd) baseDate = new Date(CAL.tmpEnd);
+    else if (CAL.max) baseDate = new Date(CAL.max);
+    else baseDate = new Date();
+    // 좌측에 1달 전 표시
+    CAL.leftMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, 1);
+
+    renderCalendars();
+
+    // 프리셋 표시
+    presets.forEach(p => p.classList.remove('active'));
+    if (STATE.filter.dateStart && STATE.filter.dateEnd) {
+      const cp = document.querySelector('.gf-presets > div[data-preset="custom"]');
+      if (cp) cp.classList.add('active');
+    } else {
+      const cp = document.querySelector('.gf-presets > div[data-preset="' + STATE.filter.days + '"]');
+      if (cp) cp.classList.add('active');
+    }
+  }
+
+  function closePopover() { pop.style.display = 'none'; }
+
+  if (btn && pop) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (pop.style.display === 'none' || !pop.style.display) openPopover();
+      else closePopover();
+    });
+
+    // 바깥 클릭 닫기
+    document.addEventListener('click', (e) => {
+      if (!pop.style.display || pop.style.display === 'none') return;
+      if (!pop.contains(e.target) && e.target !== btn) closePopover();
+    });
+
+    // 달력 네비게이션 + 날짜 클릭
+    pop.addEventListener('click', (e) => {
+      const target = e.target;
+
+      // 이전/다음 달
+      if (target.classList.contains('gf-cal-nav-btn')) {
+        const nav = target.getAttribute('data-nav');
+        if (nav === 'prev') CAL.leftMonth = new Date(CAL.leftMonth.getFullYear(), CAL.leftMonth.getMonth() - 1, 1);
+        else if (nav === 'next') CAL.leftMonth = new Date(CAL.leftMonth.getFullYear(), CAL.leftMonth.getMonth() + 1, 1);
+        renderCalendars();
+        return;
+      }
+
+      // 날짜 셀
+      if (target.classList.contains('gf-cal-day') && !target.classList.contains('disabled')) {
+        const ymd = target.getAttribute('data-ymd');
+        if (CAL.selecting === 'start' || !CAL.tmpStart) {
+          CAL.tmpStart = ymd;
+          CAL.tmpEnd = null;
+          CAL.selecting = 'end';
+        } else {
+          if (ymd < CAL.tmpStart) {
+            // 역순이면 start 갱신
+            CAL.tmpStart = ymd;
+            CAL.tmpEnd = null;
+          } else {
+            CAL.tmpEnd = ymd;
+            CAL.selecting = 'start';
+          }
+        }
+        // Custom 프리셋 활성화
+        presets.forEach(p => p.classList.remove('active'));
+        const cp = document.querySelector('.gf-presets > div[data-preset="custom"]');
+        if (cp) cp.classList.add('active');
+        renderCalendars();
+        return;
+      }
+
+      // start / end 박스 클릭 → 해당 모드
+      if (target.closest('#gf-date-start-box')) { CAL.selecting = 'start'; renderCalendars(); return; }
+      if (target.closest('#gf-date-end-box')) { CAL.selecting = 'end'; renderCalendars(); return; }
+    });
+
+    // 프리셋 클릭
+    presets.forEach(p => {
+      p.addEventListener('click', () => {
+        const val = p.getAttribute('data-preset');
+        presets.forEach(x => x.classList.remove('active'));
+        p.classList.add('active');
+        if (val === 'custom') return;
+        // 프리셋 선택 → 즉시 적용
+        STATE.filter.dateStart = null;
+        STATE.filter.dateEnd = null;
+        STATE.filter.days = +val;
+        updatePeriodRangeDisplay();
+        closePopover();
+        if (STATE.raw.length) invalidateRenderCache();
+      });
+    });
+
+    // Apply
+    if (dateApply) {
+      dateApply.addEventListener('click', () => {
+        if (!CAL.tmpStart || !CAL.tmpEnd) { alert('시작일과 종료일을 모두 선택하세요'); return; }
+        STATE.filter.dateStart = CAL.tmpStart;
+        STATE.filter.dateEnd = CAL.tmpEnd;
+        updatePeriodRangeDisplay();
+        closePopover();
+        if (STATE.raw.length) invalidateRenderCache();
+      });
+    }
+    if (dateCancel) {
+      dateCancel.addEventListener('click', closePopover);
+    }
   }
 }
 setupGlobalFilter();
@@ -4316,7 +4853,7 @@ function renderOverview() {
   document.getElementById('kpi-roi7').textContent = PCT(roi7);
   document.getElementById('kpi-roi7').className = 'kpi-value ' + (roi7 >= 1.5 ? 'good' : roi7 < 0.8 ? 'bad' : 'warn');
   document.getElementById('kpi-inst').textContent = NUM(sum.installs / effectiveDays());
-  document.getElementById('kpi-cost-sub').textContent = rows.length + '행 · ' + (STATE.filter.days >= 9999 ? '전체' : STATE.filter.days + '일');
+  document.getElementById('kpi-cost-sub').textContent = rows.length + '행 · ' + periodLabel();
   document.getElementById('kpi-rev-sub').textContent = 'D1: ' + USDp(sum.rev1);
   document.getElementById('kpi-roi1-sub').textContent = roi1 >= 0.8 ? '✓ D3 회수 궤도' : 'D3 100% 어려움';
   document.getElementById('kpi-roi1-sub').className = 'kpi-sub ' + (roi1 >= 0.8 ? 'good' : 'bad');
@@ -5967,7 +6504,7 @@ function renderTitles() {
       <div class="meta">${agg ? volumeBadge(daily) + ' · 일평균 ' + Math.round(daily) : '데이터 없음'}</div>
       <div class="stat">
         <div class="stat-main ${cls}">${roi1 == null ? '—' : PCT(roi1,0)}</div>
-        <div class="stat-sub">ROI D1 · ${STATE.filter.days >= 9999 ? '전체' : STATE.filter.days + '일'}</div>
+        <div class="stat-sub">ROI D1 · ${periodLabel()}</div>
         <div class="stat-sub" style="margin-top: 4px;">
           ${agg ? USDp(agg.Cost) + ' → ' + USDp(agg.Rev1d) : '—'}
         </div>
@@ -6489,7 +7026,7 @@ function showLiveCampaignDetail(app) {
 
     perfSection = '<div style="margin-bottom:20px; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:16px;">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">' +
-      '<div style="font-size:13px; font-weight:700; color:var(--text);">📊 소스 × OS × 국가별 성과 (' + (STATE.filter.days >= 9999 ? '전체' : STATE.filter.days + '일') + ')</div>' +
+      '<div style="font-size:13px; font-weight:700; color:var(--text);">📊 소스 × OS × 국가별 성과 (' + periodLabel() + ')</div>' +
       '<div style="display:flex; gap:8px; align-items:center;">' +
       '<label style="font-size:11px; color:var(--text-dim);">소스 상세 보기</label>' +
       '<select id="td-granularity" class="gf-select" style="font-size:11px; padding:3px 8px;">' +
@@ -6523,18 +7060,24 @@ function showLiveCampaignDetail(app) {
   }
 
   // 🆕 현재 기간 표시용
-  let periodLabel = '';
+  let periodLabelTxt = '';
   try {
-    const days = STATE.filter?.days || 14;
-    if (days >= 9999) {
-      const dates = (STATE.raw || []).map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
-      if (dates.length) periodLabel = '📅 ' + dates[0] + ' ~ ' + dates[dates.length - 1] + ' (전체)';
-    } else if (STATE.today) {
-      const end = STATE.today;
-      const start = new Date(end);
-      start.setDate(start.getDate() - (days - 1));
-      const fmt = d => d.toISOString().slice(0, 10);
-      periodLabel = '📅 ' + fmt(start) + ' ~ ' + fmt(end) + ' (' + days + '일)';
+    const f = STATE.filter || {};
+    if (f.dateStart && f.dateEnd) {
+      const span = Math.round((new Date(f.dateEnd) - new Date(f.dateStart)) / 86400000) + 1;
+      periodLabelTxt = '📅 ' + f.dateStart + ' ~ ' + f.dateEnd + ' (' + span + '일)';
+    } else {
+      const days = f.days || 14;
+      if (days >= 9999) {
+        const dates = (STATE.raw || []).map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
+        if (dates.length) periodLabelTxt = '📅 ' + dates[0] + ' ~ ' + dates[dates.length - 1] + ' (전체)';
+      } else if (STATE.today) {
+        const end = STATE.today;
+        const start = new Date(end);
+        start.setDate(start.getDate() - (days - 1));
+        const fmt = d => d.toISOString().slice(0, 10);
+        periodLabelTxt = '📅 ' + fmt(start) + ' ~ ' + fmt(end) + ' (' + days + '일)';
+      }
     }
   } catch(e) {}
 
@@ -6544,7 +7087,7 @@ function showLiveCampaignDetail(app) {
       '총 ' + related.length + '건 이력 · 네트워크 ' + byNet.size + '개' +
       (firstLiveOverall ? ' · 첫 라이브: ' + String(firstLiveOverall.timestamp).slice(0, 10) : '') +
     '</div>' +
-    (periodLabel ? '<div style="display:inline-block; padding:4px 10px; margin-bottom:16px; background:var(--bg); border:1px solid var(--border); border-radius:12px; font-size:11px; font-weight:600; color:var(--accent);">' + periodLabel + '</div>' : '') +
+    (periodLabelTxt ? '<div style="display:inline-block; padding:4px 10px; margin-bottom:16px; background:var(--bg); border:1px solid var(--border); border-radius:12px; font-size:11px; font-weight:600; color:var(--accent);">' + periodLabelTxt + '</div>' : '') +
     (sections || (appRows.length === 0 ? '<div style="padding:40px; text-align:center; color:var(--text-faint);">이력 데이터 없음</div>' : '')) +
     perfSection +
   '</div>';
@@ -6590,11 +7133,18 @@ function renderTitleDetailTimeseries(idx, container) {
 
   // 🔒 안전장치: 현재 기간 필터로 한 번 더 거르기
   try {
-    const days = STATE.filter?.days || 14;
-    if (days < 9999 && STATE.today) {
+    const f = STATE.filter || {};
+    if (f.dateStart && f.dateEnd) {
+      const start = new Date(f.dateStart);
+      const end = new Date(f.dateEnd); end.setHours(23,59,59,999);
+      rows = rows.filter(r => {
+        const d = new Date(r.Date);
+        return d >= start && d <= end;
+      });
+    } else if ((f.days || 14) < 9999 && STATE.today) {
       const end = new Date(STATE.today);
       const start = new Date(end);
-      start.setDate(start.getDate() - (days - 1));
+      start.setDate(start.getDate() - (f.days - 1));
       rows = rows.filter(r => {
         const d = new Date(r.Date);
         return d >= start && d <= end;
