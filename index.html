@@ -2445,10 +2445,16 @@ function getGroup(source) {
 // ===== 국가 정규화 =====
 const MAJOR_COUNTRIES = ['KR', 'JP', 'US'];
 function normalizeCountry(c) {
-  if (!c) return '기타';
+  if (!c) return '';
   const up = String(c).toUpperCase().trim();
-  if (MAJOR_COUNTRIES.includes(up)) return up;
-  return '기타';
+  if (/^[A-Z]{2}$/.test(up)) return up;
+  const MAP = {
+    'SOUTH KOREA': 'KR', 'KOREA': 'KR',
+    'JAPAN': 'JP',
+    'UNITED STATES': 'US', 'USA': 'US',
+    'TAIWAN': 'TW'
+  };
+  return MAP[up] || up.slice(0, 2);
 }
 
 // ===== 상태 =====
@@ -2911,7 +2917,7 @@ document.querySelectorAll('input[type=file]').forEach(inp => {
         if (src === 'rawdata') {
           STATE.raw = res.data;
           // Country 필드가 없으면 '기타'로 채움
-          STATE.raw.forEach(r => { if (!r.Country) r.Country = '기타'; });
+          STATE.raw.forEach(r => { if (!r.Country) r.Country = ''; });
           const dates = STATE.raw.map(r => new Date(r.Date)).filter(d => !isNaN(d));
           if (dates.length) {
             STATE.today = new Date(Math.max(...dates));
@@ -3655,7 +3661,7 @@ function applyData(data) {
   if (data.slack) STATE.slack = data.slack;
   if (data.offerwall) STATE.offerwall = data.offerwall;
 
-  STATE.raw.forEach(r => { if (!r.Country) r.Country = '기타'; });
+  STATE.raw.forEach(r => { if (!r.Country) r.Country = ''; });
 
   const dates = STATE.raw.map(r => new Date(r.Date)).filter(d => !isNaN(d));
   if (dates.length) {
@@ -4542,16 +4548,28 @@ function populateFilters() {
     gfn.value = currentVal;
   }
 
-  // 전역 필터: 국가 (데이터 기반으로 채움, 기본 KR/JP/US + 데이터에 있는 것)
+  // 전역 필터: 국가 (실제 데이터에 있는 것만 표시, 없으면 숨김)
   const gfc = document.getElementById('gf-country');
+  const gfcLabel = gfc ? gfc.previousElementSibling : null;
   if (gfc) {
     const currentVal = gfc.value;
-    const baseCountries = ['KR', 'JP', 'US'];
-    const extra = countries.filter(c => !baseCountries.includes(c));
-    const allCountries = [...baseCountries, ...extra];
-    gfc.innerHTML = '<option value="">전체</option>' +
-      allCountries.map(c => `<option value="${c}">${c}${c==='KR'?' (한국)':c==='JP'?' (일본)':c==='US'?' (미국)':''}</option>`).join('');
-    gfc.value = currentVal;
+    // 유효한 국가 필터: '기타' 제외한 실제 국가 코드
+    const validCountries = countries.filter(c => c && c !== '기타');
+    if (validCountries.length === 0) {
+      // 국가 데이터 없음 → 필터 숨김
+      gfc.style.display = 'none';
+      if (gfcLabel && gfcLabel.classList && gfcLabel.classList.contains('gf-label')) {
+        gfcLabel.style.display = 'none';
+      }
+    } else {
+      gfc.style.display = '';
+      if (gfcLabel && gfcLabel.classList && gfcLabel.classList.contains('gf-label')) {
+        gfcLabel.style.display = '';
+      }
+      gfc.innerHTML = '<option value="">전체</option>' +
+        validCountries.map(c => `<option value="${c}">${c}${c==='KR'?' (한국)':c==='JP'?' (일본)':c==='US'?' (미국)':''}</option>`).join('');
+      gfc.value = currentVal;
+    }
   }
 }
 
@@ -6201,6 +6219,44 @@ const EVENT_STATE2 = {
   filters: { search: '', profit: '', mapped: '', network: '' }
 };
 
+// 이벤트 달성률 row는 세션 유지 (페이지 새로고침해도 남음, 창 닫으면 사라짐)
+const EVENT_SESSION_KEY = 'minilog-event-session-v1';
+function saveEventSession() {
+  try {
+    sessionStorage.setItem(EVENT_SESSION_KEY, JSON.stringify({
+      eventRows: EVENT_STATE2.eventRows || [],
+      singularRows: EVENT_STATE2.singularRows || [],
+      results: EVENT_STATE2.results || [],
+      savedAt: new Date().toISOString()
+    }));
+  } catch(e) { console.warn('이벤트 세션 저장 실패:', e); }
+}
+function loadEventSession() {
+  try {
+    const raw = sessionStorage.getItem(EVENT_SESSION_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (data.eventRows) EVENT_STATE2.eventRows = data.eventRows;
+    if (data.singularRows) EVENT_STATE2.singularRows = data.singularRows;
+    if (data.results) EVENT_STATE2.results = data.results;
+    return true;
+  } catch(e) { return false; }
+}
+function clearEventSession() {
+  try { sessionStorage.removeItem(EVENT_SESSION_KEY); } catch(e) {}
+  EVENT_STATE2.eventRows = [];
+  EVENT_STATE2.singularRows = [];
+  EVENT_STATE2.results = [];
+}
+// 페이지 로드 시 세션 복원
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    if (loadEventSession()) {
+      console.log('[이벤트] 세션 복원: ' + (EVENT_STATE2.eventRows?.length || 0) + '행');
+    }
+  }, 400);
+});
+
 const EV_NETWORK_COLORS = {
   'Zucks': '#8b5cf6', 'adPOPcorn': '#dc2626', 'Adpopcorn': '#dc2626',
   'Skyflag': '#3b82f6', 'NBT': '#10b981', 'TNK Factory': '#f59e0b', 'TNK': '#f59e0b',
@@ -6258,6 +6314,7 @@ function onEventCsvChange(ev) {
       try {
         const rows = parseCSVString(e.target.result);
         EVENT_STATE2.eventRows = rows;
+        saveEventSession();
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--good); font-weight:600;">' + rows.length.toLocaleString() + '행 로드</span> · ' + file.name;
       } catch (err) {
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">파싱 실패: ' + err.message + '</span>';
@@ -6278,6 +6335,7 @@ function onSingularCsvChange(ev) {
       try {
         const rows = parseCSVString(e.target.result);
         EVENT_STATE2.singularRows = rows;
+        saveEventSession();
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--good); font-weight:600;">' + rows.length.toLocaleString() + '행 로드</span> · ' + file.name;
       } catch (err) {
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--bad);">파싱 실패: ' + err.message + '</span>';
@@ -6454,6 +6512,7 @@ function runEventAnalysis() {
     });
   });
   EVENT_STATE2.results = results;
+  saveEventSession();
 
   const netFilter = document.getElementById('ev2-filter-network');
   if (netFilter) {
