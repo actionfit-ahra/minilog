@@ -6542,8 +6542,8 @@ function showLiveCampaignDetail(app) {
       (firstLiveOverall ? ' · 첫 라이브: ' + String(firstLiveOverall.timestamp).slice(0, 10) : '') +
     '</div>' +
     (periodLabel ? '<div style="display:inline-block; padding:4px 10px; margin-bottom:16px; background:var(--bg); border:1px solid var(--border); border-radius:12px; font-size:11px; font-weight:600; color:var(--accent);">' + periodLabel + '</div>' : '') +
-    perfSection +
     (sections || (appRows.length === 0 ? '<div style="padding:40px; text-align:center; color:var(--text-faint);">이력 데이터 없음</div>' : '')) +
+    perfSection +
   '</div>';
 
   openLiveCampaignModal(content);
