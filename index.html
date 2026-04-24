@@ -1538,7 +1538,7 @@
       <div>#</div><div>타이틀 / 소스 / OS / 국가</div><div>판정</div>
       <div class="num">비용</div><div class="num">인스톨</div><div class="num">D1 매출</div><div class="num">ROI D1</div><div class="num">리텐션 D1</div>
     </div>
-    <div id="bleed-list"></div>
+    <div id="bleed-list" style="max-height:520px; overflow-y:auto;"></div>
   </div>
 
   <div class="panel good" style="margin-top: 16px;">
@@ -1550,7 +1550,7 @@
       <div>#</div><div>타이틀 / 소스 / OS / 국가</div><div>판정</div>
       <div class="num">비용</div><div class="num">인스톨</div><div class="num">D1 매출</div><div class="num">ROI D1</div><div class="num">리텐션 D1</div>
     </div>
-    <div id="winner-list"></div>
+    <div id="winner-list" style="max-height:520px; overflow-y:auto;"></div>
   </div>
 </section>
 
@@ -4529,7 +4529,7 @@ function renderBleed() {
 
   document.getElementById('winner-list').innerHTML = winners.length === 0
     ? '<div style="padding: 30px; text-align: center; color: var(--text-faint);">고효율 조합 없음</div>'
-    : winners.slice(0, 10).map((b, i) => `
+    : winners.map((b, i) => `
       <div class="bleeder-row">
         <div class="bleed-rank" style="color: var(--good);">${i+1}</div>
         <div class="bleed-pair"><div class="title">${b.app}</div><div class="meta">${b.src} · ${b.os} · ${b.country}</div></div>
@@ -6200,7 +6200,7 @@ function showLiveCampaignDetail(app) {
     const byCombo = new Map();
     appRows.forEach(r => {
       const key = r.Source + '|' + r.OS + '|' + normalizeCountry(r.Country);
-      if (!byCombo.has(key)) byCombo.set(key, { Cost: 0, Installs: 0, DAU: 0, Rev1d: 0, Rev3d: 0, Rev7d: 0, RevActual: 0, Ret1d: 0 });
+      if (!byCombo.has(key)) byCombo.set(key, { Cost: 0, Installs: 0, DAU: 0, Rev1d: 0, Rev3d: 0, Rev7d: 0, RevActual: 0, Ret1d: 0, rows: [] });
       const v = byCombo.get(key);
       v.Cost += +r.Cost || 0;
       v.Installs += +r.Installs || 0;
@@ -6210,42 +6210,66 @@ function showLiveCampaignDetail(app) {
       v.Rev7d += +r['Net Total Revenue 7d'] || 0;
       v.RevActual += +r['Net Total Revenue ACTUAL'] || 0;
       v.Ret1d += +r['Retained Users 1d'] || 0;
+      v.rows.push(r);
     });
 
     const perfArr = [...byCombo.entries()].map(([k, v]) => {
       const [src, os, country] = k.split('|');
       return {
+        key: k,
         src, os, country,
         cost: v.Cost, installs: v.Installs, dau: v.DAU,
+        rev1: v.Rev1d, revA: v.RevActual,
         cpi: v.Cost / (v.Installs || 1),
         roi1: v.Rev1d / (v.Cost || 1),
         roi3: v.Rev3d / (v.Cost || 1),
         roi7: v.Rev7d / (v.Cost || 1),
         roiA: v.RevActual / (v.Cost || 1),
-        rt1: v.Ret1d / (v.Installs || 1)
+        rt1: v.Ret1d / (v.Installs || 1),
+        rows: v.rows
       };
     }).filter(r => r.cost > 0 || r.installs > 0)
       .sort((a, b) => b.cost - a.cost);
 
-    const perfRows = perfArr.map(r => {
+    // 타이틀 상세 데이터를 전역 STATE에 저장 (드릴다운 시계열 구성용)
+    window._titleDetail = { app: app, byCombo: perfArr };
+
+    const perfRows = perfArr.map((r, idx) => {
       const v = verdictLabelD1(r.roi1);
-      return '<tr>' +
-        '<td style="padding:6px 8px; font-weight:600;">' + esc(r.src) + '</td>' +
+      const rowId = 'td-perf-' + idx;
+      const detailId = 'td-detail-' + idx;
+      return '<tr id="' + rowId + '" class="td-perf-row" data-action="toggleTitleDetailRow" data-args="\'' + idx + '\'" style="cursor:pointer; border-bottom:1px solid var(--border);">' +
+        '<td style="padding:6px 8px; font-weight:600; color:var(--accent);"><span class="td-arrow">▶</span> ' + esc(r.src) + '</td>' +
         '<td style="padding:6px 8px;">' + esc(r.os) + '</td>' +
         '<td style="padding:6px 8px;">' + esc(r.country || '—') + '</td>' +
         '<td style="padding:6px 8px; text-align:right; font-variant-numeric:tabular-nums;">' + USDp(r.cost) + '</td>' +
+        '<td style="padding:6px 8px; text-align:right; font-variant-numeric:tabular-nums; color:var(--accent);">' + USDp(r.rev1) + '</td>' +
+        '<td style="padding:6px 8px; text-align:right; font-variant-numeric:tabular-nums; color:var(--good);">' + USDp(r.revA) + '</td>' +
         '<td style="padding:6px 8px; text-align:right; font-variant-numeric:tabular-nums;">' + NUM(r.installs) + '</td>' +
         '<td style="padding:6px 8px; text-align:right; font-variant-numeric:tabular-nums;">' + USDp(r.cpi) + '</td>' +
         '<td style="padding:6px 8px; text-align:right;">' + roiBadgeD1(r.roi1) + '</td>' +
         '<td style="padding:6px 8px; text-align:right;">' + roiBadgeD1(r.roi3) + '</td>' +
         '<td style="padding:6px 8px; text-align:right;">' + roiBadgeD1(r.roi7) + '</td>' +
+        '<td style="padding:6px 8px; text-align:right;">' + roiBadgeD1(r.roiA) + '</td>' +
         '<td style="padding:6px 8px; text-align:right; font-variant-numeric:tabular-nums;">' + PCT(r.rt1) + '</td>' +
         '<td style="padding:6px 8px;"><span class="badge ' + v.cls + '">' + v.text + '</span></td>' +
-      '</tr>';
+      '</tr>' +
+      '<tr id="' + detailId + '" class="td-detail-row" style="display:none; background:var(--bg);"><td colspan="14" style="padding:0;"><div class="td-detail-content" data-idx="' + idx + '" style="padding:14px 20px;"></div></td></tr>';
     }).join('');
 
     perfSection = '<div style="margin-bottom:20px; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:16px;">' +
-      '<div style="font-size:13px; font-weight:700; margin-bottom:10px; color:var(--text);">📊 소스 × OS × 국가별 성과 (' + (STATE.filter.days >= 9999 ? '전체' : STATE.filter.days + '일') + ')</div>' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">' +
+      '<div style="font-size:13px; font-weight:700; color:var(--text);">📊 소스 × OS × 국가별 성과 (' + (STATE.filter.days >= 9999 ? '전체' : STATE.filter.days + '일') + ')</div>' +
+      '<div style="display:flex; gap:8px; align-items:center;">' +
+      '<label style="font-size:11px; color:var(--text-dim);">소스 상세 보기</label>' +
+      '<select id="td-granularity" class="gf-select" style="font-size:11px; padding:3px 8px;">' +
+      '<option value="day">일별</option>' +
+      '<option value="week">주별</option>' +
+      '<option value="month">월별</option>' +
+      '</select>' +
+      '</div>' +
+      '</div>' +
+      '<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">💡 소스명 행을 클릭하면 선택한 단위로 시계열이 펼쳐집니다</div>' +
       '<div style="overflow-x:auto;">' +
       '<table style="width:100%; font-size:12px; border-collapse:collapse;">' +
       '<thead><tr style="background:var(--bg); border-bottom:1px solid var(--border); text-align:left;">' +
@@ -6253,15 +6277,18 @@ function showLiveCampaignDetail(app) {
       '<th style="padding:8px;">OS</th>' +
       '<th style="padding:8px;">국가</th>' +
       '<th style="padding:8px; text-align:right;">비용</th>' +
+      '<th style="padding:8px; text-align:right;">Rev D1</th>' +
+      '<th style="padding:8px; text-align:right;">Rev ACTUAL</th>' +
       '<th style="padding:8px; text-align:right;">인스톨</th>' +
       '<th style="padding:8px; text-align:right;">CPI</th>' +
       '<th style="padding:8px; text-align:right;">ROI D1</th>' +
       '<th style="padding:8px; text-align:right;">ROI D3</th>' +
       '<th style="padding:8px; text-align:right;">ROI D7</th>' +
+      '<th style="padding:8px; text-align:right;">ROI ACT</th>' +
       '<th style="padding:8px; text-align:right;">리텐션</th>' +
       '<th style="padding:8px;">판정</th>' +
       '</tr></thead>' +
-      '<tbody>' + (perfRows || '<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--text-faint);">성과 데이터 없음</td></tr>') + '</tbody>' +
+      '<tbody>' + (perfRows || '<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--text-faint);">성과 데이터 없음</td></tr>') + '</tbody>' +
       '</table></div></div>';
   }
 
@@ -6278,6 +6305,139 @@ function showLiveCampaignDetail(app) {
   openLiveCampaignModal(content);
 }
 
+
+function toggleTitleDetailRow(idxStr) {
+  const idx = +idxStr;
+  const row = document.getElementById('td-detail-' + idx);
+  const perfRow = document.getElementById('td-perf-' + idx);
+  if (!row) return;
+
+  const isOpen = row.style.display !== 'none';
+  if (isOpen) {
+    row.style.display = 'none';
+    if (perfRow) {
+      const arr = perfRow.querySelector('.td-arrow');
+      if (arr) arr.textContent = '▶';
+    }
+    return;
+  }
+
+  // 펼치기 + 시계열 렌더
+  row.style.display = '';
+  if (perfRow) {
+    const arr = perfRow.querySelector('.td-arrow');
+    if (arr) arr.textContent = '▼';
+  }
+  const container = row.querySelector('.td-detail-content');
+  if (container) renderTitleDetailTimeseries(idx, container);
+}
+
+function renderTitleDetailTimeseries(idx, container) {
+  const td = window._titleDetail;
+  if (!td || !td.byCombo || !td.byCombo[idx]) {
+    container.innerHTML = '<div style="color:var(--text-faint);">데이터 없음</div>';
+    return;
+  }
+  const combo = td.byCombo[idx];
+  const rows = combo.rows || [];
+
+  // 집계 단위 읽기
+  const gran = (document.getElementById('td-granularity') || {}).value || 'day';
+
+  function toWeek(dateStr) {
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const thursday = new Date(d);
+    thursday.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+    const jan1 = new Date(thursday.getFullYear(), 0, 1);
+    const wk = Math.ceil((((thursday - jan1) / 86400000) + 1) / 7);
+    return thursday.getFullYear() + '-W' + String(wk).padStart(2, '0');
+  }
+  function bucketOf(d) {
+    const s = String(d).slice(0, 10);
+    if (gran === 'day') return s;
+    if (gran === 'week') return toWeek(s);
+    if (gran === 'month') return s.slice(0, 7);
+    return s;
+  }
+
+  const byBucket = new Map();
+  rows.forEach(r => {
+    const b = bucketOf(r.Date);
+    if (!byBucket.has(b)) byBucket.set(b, { Cost: 0, Installs: 0, Rev1d: 0, Rev3d: 0, Rev7d: 0, RevActual: 0, Ret1d: 0 });
+    const v = byBucket.get(b);
+    v.Cost += +r.Cost || 0;
+    v.Installs += +r.Installs || 0;
+    v.Rev1d += +r['Net Total Revenue 1d'] || 0;
+    v.Rev3d += +r['Net Total Revenue 3d'] || 0;
+    v.Rev7d += +r['Net Total Revenue 7d'] || 0;
+    v.RevActual += +r['Net Total Revenue ACTUAL'] || 0;
+    v.Ret1d += +r['Retained Users 1d'] || 0;
+  });
+
+  const series = [...byBucket.entries()].map(([bucket, v]) => ({
+    bucket,
+    cost: v.Cost, installs: v.Installs,
+    rev1: v.Rev1d, revA: v.RevActual,
+    cpi: v.Cost / (v.Installs || 1),
+    roi1: v.Rev1d / (v.Cost || 1),
+    roi3: v.Rev3d / (v.Cost || 1),
+    roi7: v.Rev7d / (v.Cost || 1),
+    roiA: v.RevActual / (v.Cost || 1),
+    rt1: v.Ret1d / (v.Installs || 1)
+  })).sort((a, b) => b.bucket.localeCompare(a.bucket));
+
+  const label = { day: '일', week: '주', month: '월' }[gran] || '일';
+
+  let html = '<div style="font-size:11px; font-weight:600; color:var(--text-dim); margin-bottom:8px;">🗓 ' + combo.src + ' · ' + combo.os + ' · ' + (combo.country || '—') + ' · ' + label + '별 추이 (' + series.length + ' ' + label + ')</div>';
+  html += '<div style="overflow-x:auto;"><table style="width:100%; font-size:11px; border-collapse:collapse;">';
+  html += '<thead><tr style="background:var(--bg-card); text-align:left; border-bottom:1px solid var(--border);">' +
+    '<th style="padding:6px;">' + label + '</th>' +
+    '<th style="padding:6px; text-align:right;">비용</th>' +
+    '<th style="padding:6px; text-align:right;">인스톨</th>' +
+    '<th style="padding:6px; text-align:right;">CPI</th>' +
+    '<th style="padding:6px; text-align:right;">Rev D1</th>' +
+    '<th style="padding:6px; text-align:right;">Rev ACT</th>' +
+    '<th style="padding:6px; text-align:right;">ROI D1</th>' +
+    '<th style="padding:6px; text-align:right;">ROI D3</th>' +
+    '<th style="padding:6px; text-align:right;">ROI D7</th>' +
+    '<th style="padding:6px; text-align:right;">ROI ACT</th>' +
+    '<th style="padding:6px; text-align:right;">리텐션</th>' +
+  '</tr></thead><tbody>';
+  series.forEach(s => {
+    html += '<tr style="border-bottom:1px solid var(--border);">' +
+      '<td style="padding:6px; font-family:var(--font-mono); font-size:10px;">' + s.bucket + '</td>' +
+      '<td style="padding:6px; text-align:right;">' + USDp(s.cost) + '</td>' +
+      '<td style="padding:6px; text-align:right;">' + NUM(s.installs) + '</td>' +
+      '<td style="padding:6px; text-align:right;">' + USDp(s.cpi) + '</td>' +
+      '<td style="padding:6px; text-align:right; color:var(--accent);">' + USDp(s.rev1) + '</td>' +
+      '<td style="padding:6px; text-align:right; color:var(--good);">' + USDp(s.revA) + '</td>' +
+      '<td style="padding:6px; text-align:right;">' + roiBadgeD1(s.roi1) + '</td>' +
+      '<td style="padding:6px; text-align:right;">' + roiBadgeD1(s.roi3) + '</td>' +
+      '<td style="padding:6px; text-align:right;">' + roiBadgeD1(s.roi7) + '</td>' +
+      '<td style="padding:6px; text-align:right;">' + roiBadgeD1(s.roiA) + '</td>' +
+      '<td style="padding:6px; text-align:right;">' + PCT(s.rt1) + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  container.innerHTML = html;
+}
+
+// 드롭다운 변경 시 펼쳐진 상세 행들 재렌더
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'td-granularity') {
+    document.querySelectorAll('.td-detail-row').forEach(row => {
+      if (row.style.display !== 'none') {
+        const content = row.querySelector('.td-detail-content');
+        if (content) {
+          const idx = +content.getAttribute('data-idx');
+          if (!isNaN(idx)) renderTitleDetailTimeseries(idx, content);
+        }
+      }
+    });
+  }
+});
 
 function openLiveCampaignModal(html) {
   let modal = document.getElementById('lc-modal');
