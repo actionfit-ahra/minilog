@@ -533,7 +533,7 @@
   /* ===== 차트 박스 ===== */
   .chart-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 14px;
     margin-bottom: 16px;
   }
@@ -1188,7 +1188,6 @@
 
   /* ===== 반응형 ===== */
   @media (max-width: 1100px) {
-    .chart-grid { grid-template-columns: 1fr; }
     .cal-wrap { grid-template-columns: 1fr; }
     .bleed-hero { grid-template-columns: 1fr; }
     .insight-grid { grid-template-columns: 1fr; }
@@ -1203,8 +1202,12 @@
     .brand-mark { font-size: 20px; }
     .brand-sub { display: none; }
     .kpi-value { font-size: 18px; }
-    .chart-canvas-wrap { height: 220px; min-height: 220px; max-height: 220px; }
-    .chart-canvas-wrap canvas { max-height: 220px !important; }
+    /* 📱 모바일: 차트 그리드 2열 유지 + 간격/높이 축소 */
+    .chart-grid { gap: 8px; }
+    .chart-box { padding: 10px 10px; }
+    .chart-box h3 { font-size: 11px; margin-bottom: 6px; }
+    .chart-canvas-wrap { height: 180px; min-height: 180px; max-height: 180px; }
+    .chart-canvas-wrap canvas { max-height: 180px !important; }
     .bleeder-row { grid-template-columns: 24px 2fr 1fr 1fr 1fr; font-size: 12px; padding: 10px 12px; }
     .bleeder-row > *:nth-child(n+6) { display: none; }
     .bleeder-row.header > *:nth-child(n+6) { display: none; }
