@@ -2822,17 +2822,16 @@ document.querySelectorAll('.slack-tab').forEach(t => {
   });
 });
 
-// ===== 전역 필터 바 (드롭다운) =====
-function setupGlobalFilter() {
 // 기간 선택 옆 날짜 범위 표시 갱신
 function updatePeriodRangeDisplay() {
   const el = document.getElementById('gf-period-range');
-  if (!el || !STATE.today) { if (el) el.textContent = ''; return; }
+  if (!el) return;
+  if (!STATE.today) { el.textContent = ''; return; }
   const days = STATE.filter?.days || 14;
   if (days >= 9999) {
     // 전체: 로우데이터의 최소/최대 날짜
-    const dates = STATE.raw.map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
-    if (dates.length) el.textContent = dates[0] + ' ~ ' + dates[dates.length - 1];
+    const dates = (STATE.raw || []).map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
+    if (dates.length) el.textContent = '📅 ' + dates[0] + ' ~ ' + dates[dates.length - 1] + ' (전체)';
     else el.textContent = '';
     return;
   }
@@ -2840,9 +2839,11 @@ function updatePeriodRangeDisplay() {
   const start = new Date(end);
   start.setDate(start.getDate() - (days - 1));
   const fmt = d => d.toISOString().slice(0, 10);
-  el.textContent = fmt(start) + ' ~ ' + fmt(end) + ' (' + days + '일)';
+  el.textContent = '📅 ' + fmt(start) + ' ~ ' + fmt(end) + ' (' + days + '일)';
 }
 
+// ===== 전역 필터 바 (드롭다운) =====
+function setupGlobalFilter() {
   const ids = ['gf-period', 'gf-os', 'gf-country', 'gf-network', 'gf-title'];
   ids.forEach(id => {
     const el = document.getElementById(id);
@@ -6240,8 +6241,9 @@ function showLiveCampaignDetail(app) {
     '</div>';
   }).join('');
 
-  // ⭐ 로우데이터에서 해당 타이틀 소스×OS×국가별 성과 집계
-  const appRows = (STATE.raw || []).filter(r => r.App === app);
+  // ⭐ 로우데이터에서 해당 타이틀 소스×OS×국가별 성과 집계 (기간 필터 적용)
+  const filteredRaw = (typeof getFilteredRows === 'function') ? getFilteredRows(true) : (STATE.raw || []);
+  const appRows = filteredRaw.filter(r => r.App === app);
   let perfSection = '';
   if (appRows.length > 0) {
     const byCombo = new Map();
@@ -6339,12 +6341,29 @@ function showLiveCampaignDetail(app) {
       '</table></div></div>';
   }
 
+  // 🆕 현재 기간 표시용
+  let periodLabel = '';
+  try {
+    const days = STATE.filter?.days || 14;
+    if (days >= 9999) {
+      const dates = (STATE.raw || []).map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
+      if (dates.length) periodLabel = '📅 ' + dates[0] + ' ~ ' + dates[dates.length - 1] + ' (전체)';
+    } else if (STATE.today) {
+      const end = STATE.today;
+      const start = new Date(end);
+      start.setDate(start.getDate() - (days - 1));
+      const fmt = d => d.toISOString().slice(0, 10);
+      periodLabel = '📅 ' + fmt(start) + ' ~ ' + fmt(end) + ' (' + days + '일)';
+    }
+  } catch(e) {}
+
   const content = '<div style="padding:24px; max-width:1100px; width:90vw;">' +
     '<h3 style="margin:0 0 6px; font-size:20px; font-weight:700;">' + esc(app) + '</h3>' +
-    '<div style="font-size:12px; color:var(--text-dim); margin-bottom:20px;">' +
+    '<div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">' +
       '총 ' + related.length + '건 이력 · 네트워크 ' + byNet.size + '개' +
       (firstLiveOverall ? ' · 첫 라이브: ' + String(firstLiveOverall.timestamp).slice(0, 10) : '') +
     '</div>' +
+    (periodLabel ? '<div style="display:inline-block; padding:4px 10px; margin-bottom:16px; background:var(--bg); border:1px solid var(--border); border-radius:12px; font-size:11px; font-weight:600; color:var(--accent);">' + periodLabel + '</div>' : '') +
     perfSection +
     (sections || (appRows.length === 0 ? '<div style="padding:40px; text-align:center; color:var(--text-faint);">이력 데이터 없음</div>' : '')) +
   '</div>';
