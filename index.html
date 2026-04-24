@@ -1770,9 +1770,10 @@
         <thead><tr>
           <th style="width: 40px;">#</th>
           <th style="width: 90px;">구분</th>
-          <th style="width: 280px;">대상</th>
+          <th style="width: 260px;">대상</th>
           <th>현황</th>
           <th class="num">비용</th>
+          <th class="num">Rev D1</th>
           <th class="num">ROI D1</th>
           <th>권장 조치</th>
         </tr></thead>
@@ -5063,7 +5064,7 @@ function renderInsights() {
       category: '즉시 조치',
       target: `${b.app} · ${b.src} · ${b.os}/${b.country}`,
       status: `D1 ROI ${PCT(b.roi1,0)} → D3 회수 실패${liveNote}`,
-      cost: b.cost, roi: b.roi1,
+      cost: b.cost, rev1: b.rev1, roi: b.roi1,
       action: b.roi1 < 0.3 
         ? `즉시 종료 · 30일 손실 ${USDp(b.loss * 30 / effectiveDays())}`
         : '예산 70% 감축 또는 단가 50% ↓',
@@ -5095,7 +5096,7 @@ function renderInsights() {
       category: '볼륨 확대',
       target: `${w.app} · ${w.src} · ${w.os}/${w.country}`,
       status: `D1 ROI ${PCT(w.roi1,0)} · 일평균 ${Math.round(w.dailyInstalls)}인스톨${liveNote}`,
-      cost: w.cost, roi: w.roi1,
+      cost: w.cost, rev1: w.rev1, roi: w.roi1,
       action: w.dailyInstalls < 50 ? '일 예산 +100% (볼륨 작음)' : '일 예산 +50% 단계 증액',
       priority: w.roi1 * w.cost
     });
@@ -5112,7 +5113,7 @@ function renderInsights() {
         category: '타이틀 부진',
         target: app + ' (전체)',
         status: `전 소스 D1 ROI ${PCT(roi1,0)}`,
-        cost: v.Cost, roi: roi1,
+        cost: v.Cost, rev1: v.Rev1d, roi: roi1,
         action: 'BM 재검토 + 크리에이티브 교체 (48h)',
         priority: v.Cost
       });
@@ -5130,7 +5131,7 @@ function renderInsights() {
         category: '리텐션 낮음',
         target: `${app} · ${src} · ${os}/${country}`,
         status: `D1 리텐션 ${PCT(rt1,1)} · 인스톨 ${NUM(v.Installs)}`,
-        cost: v.Cost, roi: v.Rev1d/(v.Cost||1),
+        cost: v.Cost, rev1: v.Rev1d, roi: v.Rev1d/(v.Cost||1),
         action: '리타겟 제외, 베타 트래픽 분리',
         priority: v.Cost
       });
@@ -5148,7 +5149,7 @@ function renderInsights() {
         category: '대박 후보',
         target: app + ' (전체)',
         status: `일평균 ${NUM(daily)}인스톨 · ROI ${PCT(roi1,0)}`,
-        cost: v.Cost, roi: roi1,
+        cost: v.Cost, rev1: v.Rev1d, roi: roi1,
         action: '신규 네트워크 추가 + 국가 확장',
         priority: daily * roi1 * 100
       });
@@ -5167,7 +5168,7 @@ function renderInsights() {
         category: 'CPI 급등',
         target: `${app} · ${src} · ${os}/${country}`,
         status: `CPI ${USDp(cpi)} · D1 ROI ${PCT(roi1,0)}`,
-        cost: v.Cost, roi: roi1,
+        cost: v.Cost, rev1: v.Rev1d, roi: roi1,
         action: '타겟팅 재조정 또는 입찰가 ↓',
         priority: v.Cost * cpi
       });
@@ -5186,28 +5187,69 @@ function renderInsightTable() {
   // 🆕 타이틀별로 그룹핑
   const byTitle = new Map();
   list.forEach(i => {
-    // target에서 타이틀 추출: "App · Src · OS/Country" 또는 "App (전체)"
     let title = (i.target || '').split(' · ')[0].replace(/\s*\(전체\)\s*$/, '').trim();
     if (!title) title = '기타';
     if (!byTitle.has(title)) byTitle.set(title, []);
     byTitle.get(title).push(i);
   });
 
+  // 타이틀별 토탈 집계 (로우데이터 기반)
+  const rows = getFilteredRows();
+  const titleTotals = new Map();
+  rows.forEach(r => {
+    if (!titleTotals.has(r.App)) titleTotals.set(r.App, { cost: 0, rev1: 0, installs: 0 });
+    const t = titleTotals.get(r.App);
+    t.cost += +r.Cost || 0;
+    t.rev1 += +r['Net Total Revenue 1d'] || 0;
+    t.installs += +r.Installs || 0;
+  });
+
   // 우선순위: 타이틀 그룹 내 최고 priority 기준 정렬
-  const groupArr = [...byTitle.entries()].map(([title, items]) => ({
-    title,
-    items,
-    topPriority: Math.max(...items.map(x => x.priority || 0)),
-    counts: {
-      urgent: items.filter(x => x.type === 'urgent').length,
-      opportunity: items.filter(x => x.type === 'opportunity').length,
-      warning: items.filter(x => x.type === 'warning').length
+  const groupArr = [...byTitle.entries()].map(([title, items]) => {
+    const totals = titleTotals.get(title) || { cost: 0, rev1: 0, installs: 0 };
+    const totalRoi1 = totals.rev1 / (totals.cost || 1);
+
+    // 타이틀 전체에 대한 권장 조치 산정
+    let titleAction = '';
+    let titleActionColor = '';
+    if (totals.cost < 50) {
+      titleAction = '모수 부족';
+      titleActionColor = 'var(--text-dim)';
+    } else if (totalRoi1 < 0.3) {
+      titleAction = '🩸 타이틀 전체 재검토';
+      titleActionColor = '#ef4444';
+    } else if (totalRoi1 < 0.5) {
+      titleAction = '⚠ BM/크리에이티브 교체';
+      titleActionColor = '#f59e0b';
+    } else if (totalRoi1 < 0.8) {
+      titleAction = '⚠ 부진 조합 정리';
+      titleActionColor = '#f59e0b';
+    } else if (totalRoi1 >= 1.5) {
+      titleAction = '🔥 볼륨 확대 / 신규 네트워크';
+      titleActionColor = '#10b981';
+    } else {
+      titleAction = '✓ 유지 + 세부 확인';
+      titleActionColor = '#10b981';
     }
-  })).sort((a, b) => b.topPriority - a.topPriority);
+
+    return {
+      title, items,
+      totals,
+      totalRoi1,
+      titleAction,
+      titleActionColor,
+      topPriority: Math.max(...items.map(x => x.priority || 0)),
+      counts: {
+        urgent: items.filter(x => x.type === 'urgent').length,
+        opportunity: items.filter(x => x.type === 'opportunity').length,
+        warning: items.filter(x => x.type === 'warning').length
+      }
+    };
+  }).sort((a, b) => b.topPriority - a.topPriority);
 
   if (groupArr.length === 0) {
-    document.getElementById('insight-list').innerHTML = 
-      '<tr><td colspan="7" style="padding: 30px; text-align: center; color: var(--text-faint);">분석할 항목 없음</td></tr>';
+    document.getElementById('insight-list').innerHTML =
+      '<tr><td colspan="8" style="padding: 30px; text-align: center; color: var(--text-faint);">분석할 항목 없음</td></tr>';
     document.getElementById('insight-count').textContent = '0건';
     return;
   }
@@ -5216,31 +5258,36 @@ function renderInsightTable() {
   groupArr.forEach((g, idx) => {
     const titleKey = 'ins-' + idx;
     const badges = [];
-    if (g.counts.urgent > 0)     badges.push('<span class="badge roi-red" style="margin-right:4px;">🩸 ' + g.counts.urgent + '</span>');
-    if (g.counts.opportunity > 0) badges.push('<span class="badge roi-green" style="margin-right:4px;">💰 ' + g.counts.opportunity + '</span>');
-    if (g.counts.warning > 0)    badges.push('<span class="badge roi-yellow" style="margin-right:4px;">⚠ ' + g.counts.warning + '</span>');
+    if (g.counts.urgent > 0)      badges.push('<span class="badge roi-red" style="margin-right:3px;">🩸' + g.counts.urgent + '</span>');
+    if (g.counts.opportunity > 0) badges.push('<span class="badge roi-green" style="margin-right:3px;">💰' + g.counts.opportunity + '</span>');
+    if (g.counts.warning > 0)     badges.push('<span class="badge roi-yellow" style="margin-right:3px;">⚠' + g.counts.warning + '</span>');
 
-    // 타이틀 헤더 행 (클릭 가능)
-    html += '<tr class="insight-title-row" data-action="toggleInsightGroup" data-args="\'' + titleKey + '\'" style="cursor:pointer; background:var(--bg-hover, rgba(0,0,0,0.02));">' +
-      '<td class="num" style="color: var(--text-faint);">' + (idx + 1) + '</td>' +
-      '<td colspan="2">' +
+    // 🆕 타이틀 헤더 행 — 토탈 ROI/비용/Rev/권장조치 표시
+    html += '<tr class="insight-title-row" data-action="toggleInsightGroup" data-args="\'' + titleKey + '\'" style="cursor:pointer; background:rgba(59,130,246,0.05); border-top:2px solid var(--border);">' +
+      '<td class="num" style="color: var(--text-faint); font-weight:600;">' + (idx + 1) + '</td>' +
+      '<td>' + badges.join('') + '</td>' +
+      '<td>' +
         '<span style="font-weight:700; font-size:13px;">▶ ' + g.title + '</span>' +
-        '<span style="margin-left:10px; font-size:11px; color:var(--text-dim);">' + g.items.length + '건</span>' +
+        '<span style="margin-left:8px; font-size:11px; color:var(--text-dim);">' + g.items.length + '건</span>' +
       '</td>' +
-      '<td colspan="4">' + badges.join('') + '</td>' +
+      '<td style="font-size:11px; color:var(--text-dim);">인스톨 ' + NUM(g.totals.installs) + '</td>' +
+      '<td class="num" style="font-weight:700;">' + USDp(g.totals.cost) + '</td>' +
+      '<td class="num" style="color:var(--accent); font-weight:600;">' + USDp(g.totals.rev1) + '</td>' +
+      '<td class="num">' + roiBadgeD1(g.totalRoi1) + '</td>' +
+      '<td style="font-size:12px; color:' + g.titleActionColor + '; font-weight:600;">' + g.titleAction + '</td>' +
       '</tr>';
 
-    // 상세 행 (기본 숨김)
+    // 세부 행 (기본 숨김) — 네트워크/OS/국가 조합별
     g.items.forEach(i => {
       const typeColor = { urgent: 'roi-red', opportunity: 'roi-green', warning: 'roi-yellow' }[i.type];
-      // target에서 네트워크/OS/국가 부분만 표시
       const afterTitle = (i.target || '').split(' · ').slice(1).join(' · ') || '(전체)';
       html += '<tr class="insight-detail-row" data-group="' + titleKey + '" style="display:none; background:var(--bg);">' +
         '<td></td>' +
         '<td><span class="badge ' + typeColor + '">' + i.icon + ' ' + i.category + '</span></td>' +
-        '<td style="font-size:12px; color:var(--text);">└ ' + afterTitle + '</td>' +
+        '<td style="font-size:12px; color:var(--text); padding-left:24px;">└ ' + afterTitle + '</td>' +
         '<td style="font-size:12px; color:var(--text-dim);">' + i.status + '</td>' +
         '<td class="num">' + USDp(i.cost) + '</td>' +
+        '<td class="num" style="color:var(--accent);">' + USDp(i.rev1 || 0) + '</td>' +
         '<td class="num">' + roiBadgeD1(i.roi) + '</td>' +
         '<td style="font-size:12px;">' + i.action + '</td>' +
         '</tr>';
