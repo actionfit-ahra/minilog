@@ -7809,28 +7809,68 @@ function parsePayoutValue(kpiStr) {
   return 0;
 }
 
-function mapLatestPayout(title, campaignName, network) {
+// 캘린더에서 (title, network, campaign_name, event_name)에 해당하는 최신 단가 매칭
+// eventName이 주어지면 정확한 이벤트 매칭 → 해당 이벤트의 payout 리턴
+function mapLatestPayout(title, campaignName, network, eventName) {
   const cal = EVENT_STATE2.calendarData;
   if (!cal.length) return null;
-  const titleLower = (title || '').toLowerCase();
-  const campaignLower = (campaignName || '').toLowerCase();
-  const networkLower = (network || '').toLowerCase();
+  const titleLower = (title || '').toLowerCase().trim();
+  const campaignLower = (campaignName || '').toLowerCase().trim();
+  const networkLower = (network || '').toLowerCase().trim();
+  const eventLower = (eventName || '').toLowerCase().trim();
 
+  // 1단계: 타이틀 + 네트워크 + (캠페인명 or 풀텍스트) 매칭
   let matches = cal.filter(c => {
     if (!c.title) return false;
-    if (c.title.toLowerCase() !== titleLower) return false;
-    if (campaignName && c.campaign_name && c.campaign_name.toLowerCase().indexOf(campaignLower) !== -1) return true;
-    if (campaignName && c.full_text && c.full_text.toLowerCase().indexOf(campaignLower) !== -1) return true;
-    if (network && c.network && c.network.toLowerCase() === networkLower) return true;
-    return false;
+    if (c.title.toLowerCase().trim() !== titleLower) return false;
+
+    // 네트워크 매칭 (있을 때만 필수)
+    if (network && c.network) {
+      if (c.network.toLowerCase().trim() !== networkLower) return false;
+    }
+    // 캠페인명이 있으면 같은 campaign_name만 (정확도 ↑)
+    if (campaignName && c.campaign_name) {
+      const camp = c.campaign_name.toLowerCase().trim();
+      if (!(camp === campaignLower || camp.includes(campaignLower) || campaignLower.includes(camp))) {
+        // 캠페인명 매칭 실패해도 network 매칭되면 통과 (campaign_name이 다르게 써있을 수도)
+        if (!network || !c.network || c.network.toLowerCase().trim() !== networkLower) return false;
+      }
+    }
+    return true;
   });
 
   if (matches.length === 0) return null;
+
+  // 2단계: 이벤트명으로 좁히기 (멀티 캠페인의 이벤트별 단가 정확 매칭)
+  let eventMatch = null;
+  if (eventLower) {
+    // 정확 일치 우선
+    eventMatch = matches.find(c => (c.event || '').toLowerCase().trim() === eventLower);
+    // 부분 일치 (숫자 포함 허들명 등)
+    if (!eventMatch) {
+      eventMatch = matches.find(c => {
+        const ev = (c.event || '').toLowerCase().trim();
+        if (!ev) return false;
+        return ev.includes(eventLower) || eventLower.includes(ev);
+      });
+    }
+  }
+
+  // 이벤트 매칭 성공 → 해당 이벤트의 payout
+  if (eventMatch) {
+    return {
+      source: eventMatch,
+      event: eventMatch.event || '',
+      payout: parsePayoutValue(eventMatch.payout || eventMatch.kpi || '')
+    };
+  }
+
+  // 이벤트명 없거나 매칭 실패 → 최신 1개 (기존 동작 폴백)
   matches.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
   return {
     source: matches[0],
     event: matches[0].event || '',
-    payout: parsePayoutValue(matches[0].kpi || '')
+    payout: parsePayoutValue(matches[0].payout || matches[0].kpi || '')
   };
 }
 
@@ -7923,23 +7963,46 @@ function runEventAnalysis() {
     const titleCode = campaign.split(/[-_]/)[0] || '';
     const title = titleMap[titleCode.toUpperCase()] || titleMap[titleCode] || titleCode;
 
-    const key = title + '|||' + os + '|||' + campaign + '|||' + partner;
+    const isInstall = eventName === '__SESSION__' || /install/i.test(eventName);
+    // ⭐ 이벤트별로 분리 (installs는 특수키)
+    const evKey = isInstall ? '__INSTALL__' : eventName;
+    const key = title + '|||' + os + '|||' + campaign + '|||' + partner + '|||' + evKey;
+
     if (!groupMap.has(key)) {
-      groupMap.set(key, { title, os, campaign, partner, installCount: 0, achieveCount: 0 });
+      groupMap.set(key, {
+        title, os, campaign, partner,
+        eventName: isInstall ? '' : eventName,
+        isInstall,
+        count: 0
+      });
     }
-    const g = groupMap.get(key);
-    if (eventName === '__SESSION__' || /install/i.test(eventName)) g.installCount++;
-    else if (eventName) g.achieveCount++;
+    groupMap.get(key).count++;
   });
 
+  // 1단계: 캠페인 단위로 installs 모으기
+  const installsByCampaign = new Map();  // key4 (title|os|campaign|partner) → installs
+  groupMap.forEach(g => {
+    if (g.isInstall) {
+      const key4 = g.title + '|||' + g.os + '|||' + g.campaign + '|||' + g.partner;
+      installsByCampaign.set(key4, (installsByCampaign.get(key4) || 0) + g.count);
+    }
+  });
+
+  // 2단계: 달성 이벤트별로 결과 생성 (이벤트별 단가 매칭)
   const networks = new Set();
   const results = [];
   groupMap.forEach(g => {
+    if (g.isInstall) return;  // install은 결과로 내지 않음
+
     networks.add(g.partner);
-    const mapped = mapLatestPayout(g.title, g.campaign, g.partner);
+    const key4 = g.title + '|||' + g.os + '|||' + g.campaign + '|||' + g.partner;
+    const installs = installsByCampaign.get(key4) || 0;
+    const achieves = g.count;
+
+    // ⭐ 이벤트명까지 포함해서 단가 매칭
+    const mapped = mapLatestPayout(g.title, g.campaign, g.partner, g.eventName);
     const payout = mapped ? mapped.payout : 0;
-    const eventCondition = mapped ? mapped.event : '';
-    const installs = g.installCount, achieves = g.achieveCount;
+    const eventCondition = mapped ? mapped.event : g.eventName;
     const achieveRate = installs > 0 ? (achieves / installs) * 100 : 0;
     const cost = achieves * payout;
     const d1rev = findD1Rev(g.title, g.partner, g.campaign);
@@ -7947,7 +8010,8 @@ function runEventAnalysis() {
     const profit = d1rev - cost;
     results.push({
       title: g.title, os: g.os, campaign: g.campaign, network: g.partner,
-      eventCondition, installs, achieves, achieveRate, payout, cost, d1rev, roi, profit,
+      eventCondition: eventCondition || g.eventName,
+      installs, achieves, achieveRate, payout, cost, d1rev, roi, profit,
       mapped: !!mapped, source: mapped ? mapped.source : null
     });
   });
