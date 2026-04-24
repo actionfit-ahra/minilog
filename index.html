@@ -2447,14 +2447,16 @@ const MAJOR_COUNTRIES = ['KR', 'JP', 'US'];
 function normalizeCountry(c) {
   if (!c) return '';
   const up = String(c).toUpperCase().trim();
-  if (/^[A-Z]{2}$/.test(up)) return up;
-  const MAP = {
+  const ALLOWED = new Set(['KR', 'JP', 'US', 'TW']);
+  const LONG_MAP = {
     'SOUTH KOREA': 'KR', 'KOREA': 'KR',
     'JAPAN': 'JP',
     'UNITED STATES': 'US', 'USA': 'US',
     'TAIWAN': 'TW'
   };
-  return MAP[up] || up.slice(0, 2);
+  if (LONG_MAP[up]) return LONG_MAP[up];
+  if (ALLOWED.has(up)) return up;
+  return '기타';
 }
 
 // ===== 상태 =====
@@ -4548,14 +4550,17 @@ function populateFilters() {
     gfn.value = currentVal;
   }
 
-  // 전역 필터: 국가 (실제 데이터에 있는 것만 표시, 없으면 숨김)
+  // 전역 필터: 국가 (KR/JP/US/TW/기타 중 데이터에 있는 것만 표시)
   const gfc = document.getElementById('gf-country');
   const gfcLabel = gfc ? gfc.previousElementSibling : null;
   if (gfc) {
     const currentVal = gfc.value;
-    // 유효한 국가 필터: '기타' 제외한 실제 국가 코드
-    const validCountries = countries.filter(c => c && c !== '기타');
-    if (validCountries.length === 0) {
+    const FIXED = ['KR', 'JP', 'US', 'TW', '기타'];
+    const LABELS = { KR: '(한국)', JP: '(일본)', US: '(미국)', TW: '(대만)', '기타': '' };
+    // 실제 데이터에 있는 국가만 표시
+    const present = FIXED.filter(c => countries.includes(c));
+
+    if (present.length === 0) {
       // 국가 데이터 없음 → 필터 숨김
       gfc.style.display = 'none';
       if (gfcLabel && gfcLabel.classList && gfcLabel.classList.contains('gf-label')) {
@@ -4567,7 +4572,7 @@ function populateFilters() {
         gfcLabel.style.display = '';
       }
       gfc.innerHTML = '<option value="">전체</option>' +
-        validCountries.map(c => `<option value="${c}">${c}${c==='KR'?' (한국)':c==='JP'?' (일본)':c==='US'?' (미국)':''}</option>`).join('');
+        present.map(c => `<option value="${c}">${c} ${LABELS[c] || ''}</option>`).join('');
       gfc.value = currentVal;
     }
   }
