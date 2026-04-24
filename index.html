@@ -4401,7 +4401,7 @@ function renderOverview() {
       cpi: v.Cost/(v.Installs||1),
       rt1: v.Ret1d/(v.Installs||1)
     };
-  }).filter(r => r.cost >= 5);
+  }).filter(r => r.cost > 0 || r.installs > 0);  // 비용 or 인스톨 있으면 표시 (0도 OK)
 
   // 🆕 정렬 적용
   const sortMode = (document.getElementById('overview-sort') || {}).value || 'cost-desc';
