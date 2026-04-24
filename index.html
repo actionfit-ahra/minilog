@@ -1345,6 +1345,7 @@
       <option value="90">최근 90일 (분기)</option>
       <option value="9999">전체 기간</option>
     </select>
+    <span id="gf-period-range" style="font-size:11px; color:var(--text-dim); padding:0 8px; align-self:center; white-space:nowrap;"></span>
     <label class="gf-label">OS</label>
     <select id="gf-os" class="gf-select">
       <option value="">전체</option>
@@ -1465,10 +1466,20 @@
       <div class="panel-header">
         <div class="panel-title">비용 상위 · 타이틀 × 소스 × OS × 국가</div>
         <div class="panel-meta" id="overview-count"></div>
+        <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+          <label style="font-size:11px; color:var(--text-dim);">집계 단위</label>
+          <select id="overview-granularity" class="gf-select" style="font-size:12px; padding:4px 8px;">
+            <option value="total" selected>전체 합계</option>
+            <option value="day">일 단위</option>
+            <option value="week">주 단위</option>
+            <option value="month">월 단위</option>
+          </select>
+        </div>
       </div>
       <div class="table-wrap">
         <table id="tbl-overview">
           <thead><tr>
+            <th id="th-overview-date" style="display:none;">날짜</th>
             <th>타이틀</th><th>소스</th><th>그룹</th><th>OS</th><th>국가</th>
             <th class="num">비용</th><th class="num">인스톨</th><th class="num">CPI</th>
             <th class="num">ROI D1</th><th class="num">ROI D3</th><th class="num">ROI D7</th>
@@ -2786,6 +2797,25 @@ document.querySelectorAll('.slack-tab').forEach(t => {
 
 // ===== 전역 필터 바 (드롭다운) =====
 function setupGlobalFilter() {
+// 기간 선택 옆 날짜 범위 표시 갱신
+function updatePeriodRangeDisplay() {
+  const el = document.getElementById('gf-period-range');
+  if (!el || !STATE.today) { if (el) el.textContent = ''; return; }
+  const days = STATE.filter?.days || 14;
+  if (days >= 9999) {
+    // 전체: 로우데이터의 최소/최대 날짜
+    const dates = STATE.raw.map(r => String(r.Date).slice(0, 10)).filter(Boolean).sort();
+    if (dates.length) el.textContent = dates[0] + ' ~ ' + dates[dates.length - 1];
+    else el.textContent = '';
+    return;
+  }
+  const end = STATE.today;
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+  const fmt = d => d.toISOString().slice(0, 10);
+  el.textContent = fmt(start) + ' ~ ' + fmt(end) + ' (' + days + '일)';
+}
+
   const ids = ['gf-period', 'gf-os', 'gf-country', 'gf-network', 'gf-title'];
   ids.forEach(id => {
     const el = document.getElementById(id);
@@ -2800,6 +2830,7 @@ function setupGlobalFilter() {
       // has-filter 클래스 토글 (전체 아닐 때 강조)
       if (id === 'gf-period') el.classList.toggle('has-filter', +v !== 14);
       else el.classList.toggle('has-filter', v !== '');
+      if (id === 'gf-period') updatePeriodRangeDisplay();
       if (STATE.raw.length) invalidateRenderCache();
     });
   });
@@ -2813,6 +2844,13 @@ function setupGlobalFilter() {
   }
 }
 setupGlobalFilter();
+
+// 집계 단위 변경 시 Overview 재렌더
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'overview-granularity') {
+    if (typeof renderOverview === 'function' && STATE.raw.length) renderOverview();
+  }
+});
 
 // 진행 중 캠페인 필터
 ['lc-filter-status', 'lc-filter-network', 'lc-filter-type', 'lc-filter-sort', 'lc-filter-search'].forEach(id => {
@@ -3639,6 +3677,7 @@ function applyData(data) {
   if (ob) ob.classList.add('hidden');
   const cw = document.getElementById('content-wrap');
   if (cw) cw.classList.remove('hidden');
+  if (typeof updatePeriodRangeDisplay === 'function') updatePeriodRangeDisplay();
   renderAll();
 }
 
@@ -4252,24 +4291,78 @@ function renderOverview() {
     }
   });
 
-  // 상위 비용 테이블
-  const arr = [...byCombo.entries()].map(([k,v]) => {
-    const [app, src, os, country] = k.split('|');
-    const days = effectiveDays();
+  // 상위 비용 테이블 (집계 단위 지원: total / day / week / month)
+  const granularityEl = document.getElementById('overview-granularity');
+  const granularity = granularityEl ? granularityEl.value : 'total';
+  const thDate = document.getElementById('th-overview-date');
+  if (thDate) thDate.style.display = (granularity === 'total') ? 'none' : '';
+
+  function toWeek(dateStr) {
+    // ISO Week 기반 'YYYY-Wnn'
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const thursday = new Date(d);
+    thursday.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+    const jan1 = new Date(thursday.getFullYear(), 0, 1);
+    const wk = Math.ceil((((thursday - jan1) / 86400000) + 1) / 7);
+    return thursday.getFullYear() + '-W' + String(wk).padStart(2, '0');
+  }
+  function toMonth(dateStr) {
+    return String(dateStr).slice(0, 7);  // YYYY-MM
+  }
+  function bucketOf(dateStr) {
+    const d = String(dateStr).slice(0, 10);
+    if (granularity === 'day') return d;
+    if (granularity === 'week') return toWeek(d);
+    if (granularity === 'month') return toMonth(d);
+    return '';  // total
+  }
+
+  // 집계 키에 날짜 버킷 추가 (total이면 빈 값)
+  const byComboWithDate = new Map();
+  rows.forEach(r => {
+    const bucket = bucketOf(r.Date);
+    const key = bucket + '||' + r.App + '|' + r.Source + '|' + r.OS + '|' + normalizeCountry(r.Country);
+    if (!byComboWithDate.has(key)) {
+      byComboWithDate.set(key, { Cost: 0, Installs: 0, Rev1d: 0, Rev3d: 0, Rev7d: 0, Ret1d: 0 });
+    }
+    const v = byComboWithDate.get(key);
+    v.Cost += +r.Cost || 0;
+    v.Installs += +r.Installs || 0;
+    v.Rev1d += +r['Net Total Revenue 1d'] || 0;
+    v.Rev3d += +r['Net Total Revenue 3d'] || 0;
+    v.Rev7d += +r['Net Total Revenue 7d'] || 0;
+    v.Ret1d += +r['Retained Users 1d'] || 0;
+  });
+
+  const daysEff = effectiveDays();
+  const arr = [...byComboWithDate.entries()].map(([k, v]) => {
+    const [bucket, combo] = k.split('||');
+    const [app, src, os, country] = combo.split('|');
     return {
-      app, src, os, country, group: getGroup(src),
-      cost: v.Cost, installs: v.Installs, dailyInstalls: v.Installs / days,
+      bucket, app, src, os, country, group: getGroup(src),
+      cost: v.Cost, installs: v.Installs,
+      dailyInstalls: v.Installs / daysEff,
       roi1: v.Rev1d/(v.Cost||1),
       roi3: v.Rev3d/(v.Cost||1),
       roi7: v.Rev7d/(v.Cost||1),
-      cpi: v.Cost/(v.Installs||1), rt1: v.Ret1d/(v.Installs||1)
+      cpi: v.Cost/(v.Installs||1),
+      rt1: v.Ret1d/(v.Installs||1)
     };
-  }).filter(r => r.cost >= 5).sort((a,b) => b.cost - a.cost).slice(0, 30);
+  }).filter(r => r.cost >= 5)
+    .sort((a,b) => {
+      // 날짜 있으면 날짜 내림차순 우선, 그 다음 비용
+      if (a.bucket && b.bucket && a.bucket !== b.bucket) return b.bucket.localeCompare(a.bucket);
+      return b.cost - a.cost;
+    })
+    .slice(0, granularity === 'total' ? 30 : 100);
 
   const tbody = document.querySelector('#tbl-overview tbody');
   tbody.innerHTML = arr.map(r => {
     const v = verdictLabelD1(r.roi1);
+    const dateCell = (granularity !== 'total') ? `<td style="font-family:var(--font-mono); font-size:11px;">${r.bucket}</td>` : '';
     return `<tr>
+      ${dateCell}
       <td class="bold">${r.app}</td>
       <td>${r.src}</td>
       <td><span class="badge neutral">${r.group}</span></td>
@@ -4285,7 +4378,9 @@ function renderOverview() {
       <td><span class="badge ${v.cls}">${v.text}</span></td>
     </tr>`;
   }).join('');
-  document.getElementById('overview-count').textContent = byCombo.size + '개 조합';
+  const label = granularity === 'total' ? byCombo.size + '개 조합'
+    : byComboWithDate.size + '개 (' + (granularity === 'day' ? '일' : granularity === 'week' ? '주' : '월') + ' 단위)';
+  document.getElementById('overview-count').textContent = label;
 }
 
 function chartOpts(C) {
@@ -4418,6 +4513,8 @@ document.getElementById('matrix-metric').addEventListener('change', renderMatrix
 function populateFilters() {
   const apps = [...new Set(STATE.raw.map(r => r.App))].sort();
   const sources = [...new Set(STATE.raw.map(r => r.Source))].sort();
+  const countries = [...new Set(STATE.raw.map(r => normalizeCountry(r.Country)))].filter(Boolean).sort();
+
   const ft = document.getElementById('f-title');
   const fs = document.getElementById('f-source');
   if (ft) ft.innerHTML = '<option value="">전체</option>' + apps.map(a => `<option>${a}</option>`).join('');
@@ -4428,12 +4525,33 @@ function populateFilters() {
     el.removeEventListener('change', renderPerformance);
     el.addEventListener('change', renderPerformance);
   });
-  // 전역 타이틀 필터 채우기
+
+  // 전역 필터: 타이틀
   const gft = document.getElementById('gf-title');
   if (gft) {
     const currentVal = gft.value;
     gft.innerHTML = '<option value="">전체</option>' + apps.map(a => `<option value="${a}">${a}</option>`).join('');
     gft.value = currentVal;
+  }
+
+  // 전역 필터: 네트워크 (데이터 기반으로 채움)
+  const gfn = document.getElementById('gf-network');
+  if (gfn) {
+    const currentVal = gfn.value;
+    gfn.innerHTML = '<option value="">전체</option>' + sources.map(s => `<option value="${s}">${s}</option>`).join('');
+    gfn.value = currentVal;
+  }
+
+  // 전역 필터: 국가 (데이터 기반으로 채움, 기본 KR/JP/US + 데이터에 있는 것)
+  const gfc = document.getElementById('gf-country');
+  if (gfc) {
+    const currentVal = gfc.value;
+    const baseCountries = ['KR', 'JP', 'US'];
+    const extra = countries.filter(c => !baseCountries.includes(c));
+    const allCountries = [...baseCountries, ...extra];
+    gfc.innerHTML = '<option value="">전체</option>' +
+      allCountries.map(c => `<option value="${c}">${c}${c==='KR'?' (한국)':c==='JP'?' (일본)':c==='US'?' (미국)':''}</option>`).join('');
+    gfc.value = currentVal;
   }
 }
 
