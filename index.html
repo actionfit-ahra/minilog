@@ -294,7 +294,7 @@
   }
   .gf-popover {
     position: absolute;
-    z-index: 100;
+    z-index: 9999;
     margin-top: 6px;
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -3355,7 +3355,9 @@ function setupGlobalFilter() {
 
     // 달력 네비게이션 + 날짜 클릭
     pop.addEventListener('click', (e) => {
+      e.stopPropagation();  // 바깥 닫기 이벤트로 전파 방지
       const target = e.target;
+      console.log('[popover click]', target.tagName, target.className, target.getAttribute('data-ymd'));
 
       // 이전/다음 달
       if (target.classList.contains('gf-cal-nav-btn')) {
@@ -3366,9 +3368,11 @@ function setupGlobalFilter() {
         return;
       }
 
-      // 날짜 셀
-      if (target.classList.contains('gf-cal-day') && !target.classList.contains('disabled')) {
-        const ymd = target.getAttribute('data-ymd');
+      // 날짜 셀 — 부모 요소에 클래스 있으면 OK (div 중첩 대응)
+      let dayEl = target.classList.contains('gf-cal-day') ? target : target.closest('.gf-cal-day');
+      if (dayEl && !dayEl.classList.contains('disabled')) {
+        const ymd = dayEl.getAttribute('data-ymd');
+        console.log('[date click]', ymd, 'selecting=', CAL.selecting, 'tmpStart=', CAL.tmpStart);
         if (CAL.selecting === 'start' || !CAL.tmpStart) {
           CAL.tmpStart = ymd;
           CAL.tmpEnd = null;
