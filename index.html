@@ -1435,6 +1435,11 @@
         <div class="kpi-sub bad">D1 &lt; 80%, 비용 &gt; $50</div>
       </div>
       <div class="kpi-card">
+        <div class="kpi-label">🎁 프리캐시 수익</div>
+        <div class="kpi-value good" id="kpi-freecash">—</div>
+        <div class="kpi-sub good" id="kpi-freecash-sub">자사 수익원</div>
+      </div>
+      <div class="kpi-card">
         <div class="kpi-label">일평균 인스톨</div>
         <div class="kpi-value" id="kpi-inst">—</div>
         <div class="kpi-sub" id="kpi-inst-sub"></div>
@@ -1459,6 +1464,18 @@
       <div class="chart-box">
         <h3>상위 10 타이틀 — ROI D1</h3>
         <div class="chart-canvas-wrap"><canvas id="chart-top"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 🎁 프리캐시 수익 전용 섹션 -->
+    <div id="freecash-section" class="chart-grid" style="margin-top:18px;">
+      <div class="chart-box">
+        <h3>🎁 프리캐시 수익 추이 (일별)</h3>
+        <div class="chart-canvas-wrap"><canvas id="chart-freecash-trend"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h3>🎁 타이틀별 프리캐시 수익 비중</h3>
+        <div class="chart-canvas-wrap"><canvas id="chart-freecash-pie"></canvas></div>
       </div>
     </div>
 
@@ -1758,6 +1775,7 @@
       <option value="urgent">🩸 즉시 조치</option>
       <option value="opportunity">💰 기회</option>
       <option value="warning">⚠ 경고</option>
+      <option value="category:프리캐시">🎁 프리캐시</option>
     </select>
   </div>
   <div class="panel">
@@ -4161,6 +4179,93 @@ function invalidateRenderCache() {
 
 // ===== 종합 =====
 let chartTrend, chartTop, chartGroupSplit, chartGroupRoi, chartCountryCost, chartCountryRoi;
+let chartFreecashTrend, chartFreecashPie;
+
+// 🎁 프리캐시 수익 전용 차트 (일별 선형 + 타이틀별 파이)
+function renderFreecashCharts(rows, C) {
+  const section = document.getElementById('freecash-section');
+  if (!section) return;
+
+  // 프리캐시 수익 있는 행만
+  const fcRows = rows.filter(r => (+r['프리캐시 수익'] || 0) > 0);
+  if (fcRows.length === 0) {
+    section.style.display = 'none';  // 프리캐시 수익 없으면 섹션 숨김
+    return;
+  }
+  section.style.display = '';
+
+  // === 1) 일별 선형 차트 ===
+  const byDay = new Map();
+  fcRows.forEach(r => {
+    const d = String(r.Date).slice(0, 10);
+    byDay.set(d, (byDay.get(d) || 0) + (+r['프리캐시 수익'] || 0));
+  });
+  const days = [...byDay.keys()].sort();
+  const values = days.map(d => byDay.get(d));
+
+  if (chartFreecashTrend) chartFreecashTrend.destroy();
+  chartFreecashTrend = new Chart(document.getElementById('chart-freecash-trend'), {
+    type: 'line',
+    data: {
+      labels: days.map(d => d.slice(5)),
+      datasets: [{
+        label: '프리캐시 수익',
+        data: values,
+        borderColor: C.good,
+        backgroundColor: C.good + '30',
+        borderWidth: 2,
+        tension: 0.3,
+        fill: true,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        unit: '$', decimals: 2
+      }]
+    },
+    options: chartOpts(C)
+  });
+
+  // === 2) 타이틀별 파이 차트 ===
+  const byTitle = new Map();
+  fcRows.forEach(r => {
+    byTitle.set(r.App, (byTitle.get(r.App) || 0) + (+r['프리캐시 수익'] || 0));
+  });
+  const titles = [...byTitle.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);  // top 10
+  const total = [...byTitle.values()].reduce((a, b) => a + b, 0);
+  const pieColors = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#6366f1','#14b8a6'];
+
+  if (chartFreecashPie) chartFreecashPie.destroy();
+  chartFreecashPie = new Chart(document.getElementById('chart-freecash-pie'), {
+    type: 'pie',
+    data: {
+      labels: titles.map(t => t[0]),
+      datasets: [{
+        data: titles.map(t => t[1]),
+        backgroundColor: titles.map((_, i) => pieColors[i % pieColors.length]),
+        borderWidth: 2,
+        borderColor: C.bg
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: C.text, font: { size: 10 }, boxWidth: 10, padding: 6 } },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.95)',
+          titleColor: '#fff', bodyColor: '#fff', padding: 10, cornerRadius: 6,
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed;
+              const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+              return ctx.label + ': $' + v.toFixed(2) + ' (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+}
 
 function getChartColors() {
   const s = getComputedStyle(document.body);
@@ -4195,8 +4300,9 @@ function renderOverview() {
     rev7: a.rev7 + (+r['Net Total Revenue 7d'] || 0),
     rev1: a.rev1 + (+r['Net Total Revenue 1d'] || 0),
     installs: a.installs + (+r.Installs || 0),
-    dau: a.dau + (+r.DAU || 0)
-  }), {cost:0,rev7:0,rev1:0,installs:0,dau:0});
+    dau: a.dau + (+r.DAU || 0),
+    freecash: a.freecash + (+r['프리캐시 수익'] || 0)
+  }), {cost:0,rev7:0,rev1:0,installs:0,dau:0,freecash:0});
 
   document.getElementById('kpi-cost').textContent = USDp(sum.cost);
   document.getElementById('kpi-rev').textContent = USDp(sum.rev7);
@@ -4261,6 +4367,20 @@ function renderOverview() {
   const bc = document.getElementById('bleed-count');
   bc.textContent = bleedCount;
   bc.classList.toggle('hidden', bleedCount === 0);
+
+  // 🎁 프리캐시 수익
+  const freecashEl = document.getElementById('kpi-freecash');
+  const freecashSub = document.getElementById('kpi-freecash-sub');
+  if (freecashEl) freecashEl.textContent = USDp(sum.freecash);
+  if (freecashSub) {
+    if (sum.freecash > 0) {
+      // 비용 대비 비율
+      const ratio = sum.cost > 0 ? (sum.freecash / sum.cost * 100).toFixed(1) : 0;
+      freecashSub.textContent = '자사 수익 · 비용 대비 ' + ratio + '%';
+    } else {
+      freecashSub.textContent = '프리캐시 수익 없음';
+    }
+  }
 
   // 트렌드 차트
   const days = [];
@@ -4333,6 +4453,9 @@ function renderOverview() {
       }
     }
   });
+
+  // 🎁 프리캐시 수익 전용 차트 2개
+  renderFreecashCharts(rows, C);
 
   // 상위 비용 테이블 (집계 단위 지원: total / day / week / month)
   const granularityEl = document.getElementById('overview-granularity');
@@ -5176,6 +5299,55 @@ function renderInsights() {
     }
   });
 
+  // 7. 🎁 프리캐시 수익 제안 (타이틀별)
+  const freecashByApp = new Map();
+  rows.forEach(r => {
+    const fc = +r['프리캐시 수익'] || 0;
+    if (fc <= 0) return;
+    if (!freecashByApp.has(r.App)) freecashByApp.set(r.App, { freecash: 0, cost: 0, rev1: 0 });
+    const t = freecashByApp.get(r.App);
+    t.freecash += fc;
+  });
+  // 비용/매출은 전체 rows 기준 (프리캐시 없는 Source 행도 포함)
+  const byAppForFC = aggregateBy(rows, r => r.App);
+  byAppForFC.forEach((v, app) => {
+    if (freecashByApp.has(app)) {
+      freecashByApp.get(app).cost = v.Cost;
+      freecashByApp.get(app).rev1 = v.Rev1d;
+    }
+  });
+
+  [...freecashByApp.entries()].forEach(([app, t]) => {
+    const totalIncome = t.rev1 + t.freecash;  // 싱귤러 D1 + 프리캐시
+    const netMargin = t.cost > 0 ? ((totalIncome - t.cost) / t.cost * 100) : 0;
+    const fcRatio = t.cost > 0 ? (t.freecash / t.cost * 100) : 0;
+
+    let action = '';
+    let type = 'opportunity';
+    let icon = '🎁';
+
+    if (t.freecash >= 100 && fcRatio >= 30) {
+      // 프리캐시가 비용의 30% 이상 — 의미 있는 수익원
+      action = '프리캐시 수익 비중 ' + fcRatio.toFixed(0) + '% · 확대 검토';
+      if (netMargin >= 20) action = '✓ 이익 구간 · 예산 증액 가능';
+    } else if (t.freecash >= 50) {
+      action = '프리캐시 모니터링 · 확대 여지 확인';
+    } else {
+      action = '소액 수익 · 경과 관찰';
+    }
+
+    insights.push({
+      type: type,
+      icon: icon,
+      category: '프리캐시',
+      target: app + ' (전체)',
+      status: '프리캐시 ' + USDp(t.freecash) + ' · D1매출 ' + USDp(t.rev1) + ' · 비용 ' + USDp(t.cost),
+      cost: t.cost, rev1: t.rev1, roi: (t.rev1 + t.freecash)/(t.cost||1),
+      action: action,
+      priority: t.freecash * 2  // 프리캐시는 우선순위 높게
+    });
+  });
+
   insights.sort((a,b) => b.priority - a.priority);
   STATE._insights = insights;
   renderInsightTable();
@@ -5183,7 +5355,13 @@ function renderInsights() {
 
 function renderInsightTable() {
   const filter = document.getElementById('insight-filter')?.value || '';
-  const list = (STATE._insights || []).filter(i => !filter || i.type === filter);
+  const list = (STATE._insights || []).filter(i => {
+    if (!filter) return true;
+    if (filter.startsWith('category:')) {
+      return i.category === filter.slice(9);
+    }
+    return i.type === filter;
+  });
 
   // 🆕 타이틀별로 그룹핑
   const byTitle = new Map();
@@ -6405,7 +6583,21 @@ function renderTitleDetailTimeseries(idx, container) {
     return;
   }
   const combo = td.byCombo[idx];
-  const rows = combo.rows || [];
+  let rows = combo.rows || [];
+
+  // 🔒 안전장치: 현재 기간 필터로 한 번 더 거르기
+  try {
+    const days = STATE.filter?.days || 14;
+    if (days < 9999 && STATE.today) {
+      const end = new Date(STATE.today);
+      const start = new Date(end);
+      start.setDate(start.getDate() - (days - 1));
+      rows = rows.filter(r => {
+        const d = new Date(r.Date);
+        return d >= start && d <= end;
+      });
+    }
+  } catch(e) {}
 
   // 집계 단위 읽기
   const gran = (document.getElementById('td-granularity') || {}).value || 'day';
