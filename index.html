@@ -279,11 +279,12 @@
     font-weight: 500;
     border-radius: 6px;
     cursor: pointer;
-    min-width: 130px;
+    min-width: 210px;
     text-align: left;
     display: inline-flex;
     align-items: center;
     transition: all 0.12s;
+    white-space: nowrap;
   }
   .gf-period-btn:hover { border-color: var(--border-strong); background: var(--bg-hover); }
   .gf-period-btn.has-filter {
@@ -3122,7 +3123,7 @@ function updatePeriodRangeDisplay() {
     const e = new Date(f.dateEnd);
     const span = Math.round((e - s) / 86400000) + 1;
     el.textContent = '📅 ' + f.dateStart + ' ~ ' + f.dateEnd + ' (' + span + '일)';
-    if (labelEl) labelEl.textContent = span + '일 (Custom)';
+    if (labelEl) labelEl.textContent = f.dateStart + ' ~ ' + f.dateEnd;
     if (btnEl) btnEl.classList.add('has-filter');
     return;
   }
